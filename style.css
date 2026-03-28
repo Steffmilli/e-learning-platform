@@ -620,3 +620,105 @@ form button:hover {
         font-size: 12px;
     }
 }
+/* Amélioration de l'écran de connexion */
+.login-screen {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.login-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+.login-tab-btn {
+    padding: 12px 30px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    color: white;
+}
+
+.login-tab-btn.active {
+    background: white;
+    color: #667eea;
+}
+
+.login-card {
+    background: white;
+    padding: 35px 30px;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    max-width: 400px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+/* CORRECTION POUR MOBILE */
+@media (max-width: 768px) {
+    .login-screen {
+        padding: 15px;
+        min-height: 100vh;
+        align-items: center;
+    }
+    
+    .login-tabs {
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .login-tab-btn {
+        padding: 10px 20px;
+        font-size: 14px;
+    }
+    
+    .login-card {
+        padding: 25px 20px;
+    }
+    
+    .login-card h2 {
+        font-size: 22px;
+        margin-bottom: 20px;
+    }
+    
+    .login-card input {
+        padding: 12px;
+        font-size: 15px;
+    }
+    
+    .login-card button {
+        padding: 12px;
+        font-size: 15px;
+    }
+}
+
+/* Pour très petits écrans (moins de 480px) */
+@media (max-width: 480px) {
+    .login-tabs {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .login-tab-btn {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .login-card {
+        padding: 20px 15px;
+    }
+    
+    .login-card h2 {
+        font-size: 20px;
+    }
+}
