@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Learning Platform - Formation en ligne</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎓 Plateforme E-Learning</h1>
+            <p>Gestion complète des cours, quiz et apprenants</p>
+        </header>
+
+        <!-- Écran de connexion / inscription -->
+        <div id="login-screen" class="login-screen">
+            <div class="login-tabs">
+                <button class="login-tab-btn active" data-login-tab="login">🔐 Connexion</button>
+                <button class="login-tab-btn" data-login-tab="register">📝 Inscription</button>
+            </div>
+
+            <!-- Formulaire de connexion -->
+            <div id="login-tab" class="login-tab-content active">
+                <div class="login-card">
+                    <h2>Connexion</h2>
+                    <form id="login-form">
+                        <input type="text" id="login-username" placeholder="Nom d'utilisateur" required>
+                        <input type="password" id="login-password" placeholder="Mot de passe" required>
+                        <button type="submit">Se connecter</button>
+                    </form>
+                    <p id="login-error" class="error-message"></p>
+                </div>
+            </div>
+
+            <!-- Formulaire d'inscription -->
+            <div id="register-tab" class="login-tab-content">
+                <div class="login-card">
+                    <h2>Créer un compte</h2>
+                    <form id="register-form">
+                        <input type="text" id="reg-name" placeholder="Nom complet" required>
+                        <input type="text" id="reg-username" placeholder="Nom d'utilisateur" required>
+                        <input type="password" id="reg-password" placeholder="Mot de passe" required>
+                        <input type="email" id="reg-email" placeholder="Email" required>
+                        <input type="tel" id="reg-phone" placeholder="Téléphone (optionnel)">
+                        <button type="submit">Créer mon compte</button>
+                    </form>
+                    <p id="register-error" class="error-message"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interface principale (masquée au départ) -->
+        <div id="main-app" style="display:none;">
+            <!-- Info utilisateur connecté -->
+            <div class="user-info">
+                <div class="user-details">
+                    <span class="user-icon">👤</span>
+                    <span id="user-name-display"></span>
+                    <span id="user-role-badge" class="role-badge"></span>
+                </div>
+                <button id="logout-btn" class="logout-btn">🚪 Déconnexion</button>
+            </div>
+
+            <!-- Navigation par onglets -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="dashboard">📊 Mon Tableau de bord</button>
+                <button class="tab-btn admin-only" data-tab="learners">👥 Gestion Apprenants</button>
+                <button class="tab-btn admin-only" data-tab="courses">📚 Gestion Cours</button>
+                <button class="tab-btn admin-only" data-tab="quizzes">📝 Gestion Quiz</button>
+                <button class="tab-btn admin-only" data-tab="tracking">📊 Suivi Global</button>
+            </div>
+
+            <!-- Onglet Tableau de bord de l'apprenant -->
+            <div id="dashboard-tab" class="tab-content active">
+                <h2>📚 Mes cours</h2>
+                <div id="my-courses"></div>
+                
+                <h2>🎯 Mes quiz</h2>
+                <div id="my-quizzes"></div>
+            </div>
+
+            <!-- Onglet Apprenants (Admin uniquement) -->
+            <div id="learners-tab" class="tab-content">
+                <div class="form-section">
+                    <h2>➕ Ajouter un apprenant (admin)</h2>
+                    <form id="learner-form">
+                        <input type="text" id="learner-name" placeholder="Nom complet" required>
+                        <input type="text" id="learner-username" placeholder="Nom d'utilisateur" required>
+                        <input type="password" id="learner-password" placeholder="Mot de passe" required>
+                        <input type="email" id="learner-email" placeholder="Email" required>
+                        <input type="tel" id="learner-phone" placeholder="Téléphone">
+                        <button type="submit">Ajouter l'apprenant</button>
+                    </form>
+                </div>
+
+                <div class="list-section">
+                    <h2>📋 Liste des apprenants</h2>
+                    <input type="text" id="learner-search" placeholder="🔍 Rechercher un apprenant..." class="search-input">
+                    <div id="learners-list" class="cards-grid"></div>
+                </div>
+            </div>
+
+            <!-- Onglet Cours (Admin uniquement) -->
+            <div id="courses-tab" class="tab-content">
+                <div class="form-section">
+                    <h2>➕ Ajouter un cours</h2>
+                    <form id="course-form">
+                        <input type="text" id="course-title" placeholder="Titre du cours" required>
+                        <textarea id="course-desc" placeholder="Description" rows="3" required></textarea>
+                        <input type="url" id="course-video" placeholder="URL de la vidéo (YouTube)" required>
+                        <select id="course-level" required>
+                            <option value="">Niveau</option>
+                            <option value="Débutant">Débutant</option>
+                            <option value="Intermédiaire">Intermédiaire</option>
+                            <option value="Avancé">Avancé</option>
+                        </select>
+                        <button type="submit">Ajouter le cours</button>
+                    </form>
+                </div>
+
+                <div class="list-section">
+                    <h2>📖 Liste des cours</h2>
+                    <input type="text" id="course-search" placeholder="🔍 Rechercher un cours..." class="search-input">
+                    <div id="courses-list" class="cards-grid"></div>
+                </div>
+            </div>
+
+            <!-- Onglet Quiz (Admin uniquement) -->
+            <div id="quizzes-tab" class="tab-content">
+                <div class="form-section">
+                    <h2>➕ Ajouter un quiz</h2>
+                    <form id="quiz-form">
+                        <select id="quiz-course" required>
+                            <option value="">Sélectionner un cours</option>
+                        </select>
+                        <input type="text" id="quiz-title" placeholder="Titre du quiz" required>
+                        <div id="questions-container">
+                            <div class="question-item">
+                                <input type="text" placeholder="Question 1" class="question-text" required>
+                                <input type="text" placeholder="Option 1" class="option-input" required>
+                                <input type="text" placeholder="Option 2" class="option-input" required>
+                                <input type="text" placeholder="Option 3" class="option-input" required>
+                                <select class="correct-answer" required>
+                                    <option value="">Bonne réponse</option>
+                                    <option value="0">Option 1</option>
+                                    <option value="1">Option 2</option>
+                                    <option value="2">Option 3</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="button" id="add-question">➕ Ajouter une question</button>
+                        <button type="submit">Créer le quiz</button>
+                    </form>
+                </div>
+
+                <div class="list-section">
+                    <h2>📝 Quiz disponibles</h2>
+                    <div id="quizzes-list"></div>
+                </div>
+            </div>
+
+            <!-- Onglet Suivi Global (Admin uniquement) -->
+            <div id="tracking-tab" class="tab-content">
+                <div class="form-section">
+                    <h2>📊 Suivi des apprenants</h2>
+                    <select id="tracking-learner">
+                        <option value="">Sélectionner un apprenant</option>
+                    </select>
+                </div>
+                <div id="tracking-info"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal pour passer un quiz -->
+    <div id="quiz-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3 id="modal-quiz-title"></h3>
+            <div id="modal-questions"></div>
+            <button id="submit-quiz-modal">Soumettre le quiz</button>
+            <div id="modal-result"></div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>🎓 Plateforme E-Learning</h3>
+                <p>Formation en ligne - Cours, quiz et certificats</p>
+            </div>
+            <div class="footer-section">
+                <h3>📞 Contact</h3>
+                <p>📧 <a href="mailto:yvesmillogo459@gmail.com">yvesmillogo459@gmail.com</a></p>
+                <p>📱 <a href="tel:+22654128536">+22654128536</a></p>
+                <p>📍 16.17 Rue, Bobo-Dioulasso, Burkina Faso</p>
+            </div>
+            <div class="footer-section">
+                <h3>© 2026</h3>
+                <p>Plateforme E-Learning - Tous droits réservés</p>
+            </div>
+        </div>
+    </footer>
+
+
+    <script src="script.js"></script>
+</body>
+</html>
