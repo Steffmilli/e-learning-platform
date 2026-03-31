@@ -1031,11 +1031,11 @@ window.generateCertificate = function(learnerId) {
                     padding: 40px;
                 }
                 .certificate {
-                    max-width: 900px;
-                    width: 100%;
+                    max-width: 600px;
+                    width: 90%;
                     background: white;
-                    border-radius: 20px;
-                    box-shadow: 0 30px 60px rgba(0,0,0,0.3);
+                    border-radius: 15px;
+                    box-shadow: 0 15px 30px rgba(0,0,0,0.2);
                     overflow: hidden;
                 }
                 .certificate-header {
