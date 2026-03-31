@@ -75,7 +75,7 @@ function loginSuccess(user) {
         roleBadge.textContent = 'MILLOGO Sèko Yves Stéphane';
         roleBadge.className = 'role-badge admin';
     } else {
-       
+        roleBadge.textContent ='Apprenant';
         roleBadge.className = 'role-badge learner';
     }
     
@@ -1172,7 +1172,8 @@ window.generateCertificate = function(learnerId) {
                 </div>
                 <div class="certificate-footer">
                     <div class="signature">
-                        _________________________<br>
+                         MILLOGO S. Yves Stéphane 
+                       <br> _________________________<br>
                         Le Directeur Pédagogique
                     </div>
                     <div class="date">
