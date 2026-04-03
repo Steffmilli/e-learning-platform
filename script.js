@@ -20,159 +20,194 @@ let quizzes = [];
 let progress = {};
 let messages = [];
 let currentUser = null;
-let syncInProgress = false;
 
 // Compte admin prédéfini
 const ADMIN_USERNAME = "Steph";
 const ADMIN_PASSWORD = "Steffmilli00";
 
-// ==================== SYNCHRONISATION FIREBASE ====================
-async function syncFromFirebase() {
-    if (syncInProgress) return;
-    syncInProgress = true;
-    
+// ==================== CHARGEMENT DEPUIS FIREBASE ====================
+async function loadAllData() {
     try {
-        // Récupérer les apprenants
-        const learnersSnapshot = await db.collection('learners').get();
+        // Charger les apprenants
+        const learnersSnap = await db.collection('learners').get();
         learners = [];
-        learnersSnapshot.forEach(doc => {
+        learnersSnap.forEach(doc => {
             learners.push({ id: parseInt(doc.id), ...doc.data() });
         });
         
-        // Récupérer les cours
-        const coursesSnapshot = await db.collection('courses').get();
+        // Charger les cours
+        const coursesSnap = await db.collection('courses').get();
         courses = [];
-        coursesSnapshot.forEach(doc => {
+        coursesSnap.forEach(doc => {
             courses.push({ id: parseInt(doc.id), ...doc.data() });
         });
         
-        // Récupérer les quiz
-        const quizzesSnapshot = await db.collection('quizzes').get();
+        // Charger les quiz
+        const quizzesSnap = await db.collection('quizzes').get();
         quizzes = [];
-        quizzesSnapshot.forEach(doc => {
+        quizzesSnap.forEach(doc => {
             quizzes.push({ id: parseInt(doc.id), ...doc.data() });
         });
         
-        // Récupérer les progrès
-        const progressSnapshot = await db.collection('progress').get();
+        // Charger les progrès
+        const progressSnap = await db.collection('progress').get();
         progress = {};
-        progressSnapshot.forEach(doc => {
+        progressSnap.forEach(doc => {
             progress[doc.id] = doc.data();
         });
         
-        // Récupérer les messages
-        const messagesSnapshot = await db.collection('messages').get();
+        // Charger les messages
+        const messagesSnap = await db.collection('messages').get();
         messages = [];
-        messagesSnapshot.forEach(doc => {
+        messagesSnap.forEach(doc => {
             messages.push({ id: parseInt(doc.id), ...doc.data() });
         });
         
-        // Sauvegarder localement
-        saveToLocalStorage();
-        
-        // Rafraîchir l'interface
-        if (currentUser) {
-            refreshUI();
+        console.log('Données chargées depuis Firebase');
+    } catch (error) {
+        console.error('Erreur chargement:', error);
+        showAlert('Erreur de chargement des données', 'error');
+    }
+}
+
+// ==================== SAUVEGARDE DANS FIREBASE ====================
+async function saveLearner(learner) {
+    await db.collection('learners').doc(learner.id.toString()).set(learner);
+}
+
+async function deleteLearnerFromFirebase(id) {
+    await db.collection('learners').doc(id.toString()).delete();
+}
+
+async function saveCourse(course) {
+    await db.collection('courses').doc(course.id.toString()).set(course);
+}
+
+async function deleteCourseFromFirebase(id) {
+    await db.collection('courses').doc(id.toString()).delete();
+}
+
+async function saveQuiz(quiz) {
+    await db.collection('quizzes').doc(quiz.id.toString()).set(quiz);
+}
+
+async function deleteQuizFromFirebase(id) {
+    await db.collection('quizzes').doc(id.toString()).delete();
+}
+
+async function saveProgressForLearner(learnerId) {
+    if (progress[learnerId]) {
+        await db.collection('progress').doc(learnerId.toString()).set(progress[learnerId]);
+    }
+}
+
+async function saveMessage(message) {
+    await db.collection('messages').doc(message.id.toString()).set(message);
+}
+
+async function deleteMessageFromFirebase(id) {
+    await db.collection('messages').doc(id.toString()).delete();
+}
+
+// ==================== ÉCOUTEURS TEMPS RÉEL ====================
+function setupRealtimeListeners() {
+    // Écouter les changements sur les apprenants
+    db.collection('learners').onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const data = { id: parseInt(change.doc.id), ...change.doc.data() };
+            if (change.type === 'added') {
+                if (!learners.find(l => l.id === data.id)) learners.push(data);
+            } else if (change.type === 'modified') {
+                const index = learners.findIndex(l => l.id === data.id);
+                if (index !== -1) learners[index] = data;
+            } else if (change.type === 'removed') {
+                learners = learners.filter(l => l.id !== data.id);
+            }
+        });
+        if (currentUser) refreshUI();
+    });
+    
+    // Écouter les changements sur les cours
+    db.collection('courses').onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const data = { id: parseInt(change.doc.id), ...change.doc.data() };
+            if (change.type === 'added') {
+                if (!courses.find(c => c.id === data.id)) courses.push(data);
+            } else if (change.type === 'modified') {
+                const index = courses.findIndex(c => c.id === data.id);
+                if (index !== -1) courses[index] = data;
+            } else if (change.type === 'removed') {
+                courses = courses.filter(c => c.id !== data.id);
+            }
+        });
+        if (currentUser) refreshUI();
+    });
+    
+    // Écouter les changements sur les quiz
+    db.collection('quizzes').onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const data = { id: parseInt(change.doc.id), ...change.doc.data() };
+            if (change.type === 'added') {
+                if (!quizzes.find(q => q.id === data.id)) quizzes.push(data);
+            } else if (change.type === 'modified') {
+                const index = quizzes.findIndex(q => q.id === data.id);
+                if (index !== -1) quizzes[index] = data;
+            } else if (change.type === 'removed') {
+                quizzes = quizzes.filter(q => q.id !== data.id);
+            }
+        });
+        if (currentUser) refreshUI();
+    });
+    
+    // Écouter les changements sur les progrès
+    db.collection('progress').onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === 'modified' || change.type === 'added') {
+                progress[change.doc.id] = change.doc.data();
+            }
+        });
+        if (currentUser) refreshUI();
+    });
+    
+    // Écouter les changements sur les messages
+    db.collection('messages').onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const data = { id: parseInt(change.doc.id), ...change.doc.data() };
+            if (change.type === 'added') {
+                messages.push(data);
+            } else if (change.type === 'modified') {
+                const index = messages.findIndex(m => m.id === data.id);
+                if (index !== -1) messages[index] = data;
+            } else if (change.type === 'removed') {
+                messages = messages.filter(m => m.id !== data.id);
+            }
+        });
+        if (currentUser && document.getElementById('messages-tab').classList.contains('active')) {
+            loadMessages();
         }
-        
-        console.log('Synchronisation réussie');
-    } catch (error) {
-        console.error('Erreur de synchronisation:', error);
-        showAlert('Erreur de synchronisation avec le cloud', 'error');
-    } finally {
-        syncInProgress = false;
-    }
-}
-
-async function syncToFirebase(collection, data, id) {
-    try {
-        await db.collection(collection).doc(id.toString()).set(data);
-    } catch (error) {
-        console.error(`Erreur sync ${collection}:`, error);
-    }
-}
-
-async function deleteFromFirebase(collection, id) {
-    try {
-        await db.collection(collection).doc(id.toString()).delete();
-    } catch (error) {
-        console.error(`Erreur suppression ${collection}:`, error);
-    }
-}
-
-function saveToLocalStorage() {
-    localStorage.setItem('learners', JSON.stringify(learners));
-    localStorage.setItem('courses', JSON.stringify(courses));
-    localStorage.setItem('quizzes', JSON.stringify(quizzes));
-    localStorage.setItem('progress', JSON.stringify(progress));
-    localStorage.setItem('messages', JSON.stringify(messages));
-}
-
-function loadFromLocalStorage() {
-    learners = JSON.parse(localStorage.getItem('learners')) || [];
-    courses = JSON.parse(localStorage.getItem('courses')) || [];
-    quizzes = JSON.parse(localStorage.getItem('quizzes')) || [];
-    progress = JSON.parse(localStorage.getItem('progress')) || {};
-    messages = JSON.parse(localStorage.getItem('messages')) || [];
-}
-
-// Sauvegardes avec sync Firebase
-async function saveLearners() {
-    saveToLocalStorage();
-    for (let learner of learners) {
-        await syncToFirebase('learners', learner, learner.id);
-    }
-}
-
-async function saveCourses() {
-    saveToLocalStorage();
-    for (let course of courses) {
-        await syncToFirebase('courses', course, course.id);
-    }
-}
-
-async function saveQuizzes() {
-    saveToLocalStorage();
-    for (let quiz of quizzes) {
-        await syncToFirebase('quizzes', quiz, quiz.id);
-    }
-}
-
-async function saveProgress() {
-    saveToLocalStorage();
-    for (let learnerId in progress) {
-        await syncToFirebase('progress', progress[learnerId], learnerId);
-    }
-}
-
-async function saveMessages() {
-    saveToLocalStorage();
-    for (let message of messages) {
-        await syncToFirebase('messages', message, message.id);
-    }
+    });
 }
 
 // ==================== INITIALISATION ====================
 async function init() {
-    // Charger les données locales d'abord
-    loadFromLocalStorage();
+    // Charger les données depuis Firebase
+    await loadAllData();
     
     // Ajouter un cours de démonstration si vide
-    if (courses.length === 0) {
-        courses.push({
+    const coursesSnap = await db.collection('courses').get();
+    if (coursesSnap.empty) {
+        const demoCourse = {
             id: Date.now(),
             title: "Introduction à JavaScript",
             description: "Apprenez les bases de JavaScript, le langage de programmation du web moderne.",
             videoUrl: "https://www.youtube.com/watch?v=hdI2bqOjy3c",
             level: "Débutant"
-        });
-        await saveCourses();
+        };
+        await db.collection('courses').doc(demoCourse.id.toString()).set(demoCourse);
+        courses.push(demoCourse);
     }
     
-    // Synchroniser avec Firebase
-    await syncFromFirebase();
-    
-    // Configurer écouteurs en temps réel
+    // Configurer les écouteurs temps réel
     setupRealtimeListeners();
     
     // Vérifier session
@@ -195,71 +230,6 @@ async function init() {
     }
     
     setupEventListeners();
-}
-
-function setupRealtimeListeners() {
-    // Écouter les changements sur les apprenants
-    db.collection('learners').onSnapshot((snapshot) => {
-        if (!syncInProgress) {
-            snapshot.docChanges().forEach(async (change) => {
-                if (change.type === 'added' || change.type === 'modified') {
-                    const learner = { id: parseInt(change.doc.id), ...change.doc.data() };
-                    const index = learners.findIndex(l => l.id === learner.id);
-                    if (index === -1) {
-                        learners.push(learner);
-                    } else {
-                        learners[index] = learner;
-                    }
-                } else if (change.type === 'removed') {
-                    learners = learners.filter(l => l.id !== parseInt(change.doc.id));
-                }
-            });
-            saveToLocalStorage();
-            if (currentUser) refreshUI();
-        }
-    });
-    
-    // Écouter les changements sur les cours
-    db.collection('courses').onSnapshot((snapshot) => {
-        if (!syncInProgress) {
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === 'added' || change.type === 'modified') {
-                    const course = { id: parseInt(change.doc.id), ...change.doc.data() };
-                    const index = courses.findIndex(c => c.id === course.id);
-                    if (index === -1) {
-                        courses.push(course);
-                    } else {
-                        courses[index] = course;
-                    }
-                } else if (change.type === 'removed') {
-                    courses = courses.filter(c => c.id !== parseInt(change.doc.id));
-                }
-            });
-            saveToLocalStorage();
-            if (currentUser) refreshUI();
-        }
-    });
-    
-    // Écouter les changements sur les quiz
-    db.collection('quizzes').onSnapshot((snapshot) => {
-        if (!syncInProgress) {
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === 'added' || change.type === 'modified') {
-                    const quiz = { id: parseInt(change.doc.id), ...change.doc.data() };
-                    const index = quizzes.findIndex(q => q.id === quiz.id);
-                    if (index === -1) {
-                        quizzes.push(quiz);
-                    } else {
-                        quizzes[index] = quiz;
-                    }
-                } else if (change.type === 'removed') {
-                    quizzes = quizzes.filter(q => q.id !== parseInt(change.doc.id));
-                }
-            });
-            saveToLocalStorage();
-            if (currentUser) refreshUI();
-        }
-    });
 }
 
 function refreshUI() {
@@ -288,7 +258,6 @@ function loginSuccess(user) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-app').style.display = 'block';
     
-    // Afficher infos
     document.getElementById('user-name-display').textContent = user.name;
     const roleBadge = document.getElementById('user-role-badge');
     if (user.role === 'admin') {
@@ -299,7 +268,6 @@ function loginSuccess(user) {
         roleBadge.className = 'role-badge learner';
     }
     
-    // Masquer/afficher onglets admin
     const adminTabs = document.querySelectorAll('.admin-only');
     if (user.role === 'admin') {
         adminTabs.forEach(tab => tab.classList.remove('hidden'));
@@ -308,50 +276,40 @@ function loginSuccess(user) {
         switchTab('dashboard');
     }
     
-    // Charger données
     refreshUI();
 }
 
 function setupEventListeners() {
-    // Onglets connexion
     document.querySelectorAll('.login-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchLoginTab(btn.dataset.loginTab));
     });
     
-    // Formulaires
     document.getElementById('login-form').addEventListener('submit', handleLogin);
     document.getElementById('register-form').addEventListener('submit', handleRegister);
     document.getElementById('logout-btn').addEventListener('click', logout);
     
-    // Onglets principaux
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
     
-    // Formulaires admin
     document.getElementById('learner-form').addEventListener('submit', addLearner);
     document.getElementById('course-form').addEventListener('submit', addCourse);
     document.getElementById('quiz-form').addEventListener('submit', addQuiz);
     document.getElementById('add-question').addEventListener('click', addQuestion);
     
-    // Recherches
     document.getElementById('learner-search').addEventListener('input', (e) => renderLearners(e.target.value));
     document.getElementById('course-search').addEventListener('input', (e) => renderCourses(e.target.value));
     
-    // Suivi
     document.getElementById('tracking-learner').addEventListener('change', (e) => showTracking(e.target.value));
     
-    // Messages
     document.getElementById('message-form').addEventListener('submit', sendMessage);
     
-    // Modal
     document.querySelector('.close').addEventListener('click', () => closeModal());
     window.addEventListener('click', (e) => {
         const modal = document.getElementById('quiz-modal');
         if (e.target === modal) closeModal();
     });
     
-    // Certificats
     document.getElementById('certificate-learner').addEventListener('change', () => {
         const learnerId = document.getElementById('certificate-learner').value;
         if (learnerId) previewCertificate(learnerId);
@@ -373,7 +331,6 @@ function handleLogin(e) {
     const password = document.getElementById('login-password').value;
     const errorDiv = document.getElementById('login-error');
     
-    // Vérifier admin
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
         loginSuccess({
             id: 'admin',
@@ -385,7 +342,6 @@ function handleLogin(e) {
         return;
     }
     
-    // Vérifier apprenant
     const learner = learners.find(l => l.username === username && l.password === password);
     if (learner) {
         loginSuccess({
@@ -441,12 +397,11 @@ async function handleRegister(e) {
     };
     
     learners.push(learner);
-    await saveLearners();
+    await saveLearner(learner);
     
     progress[learner.id] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
-    await saveProgress();
+    await saveProgressForLearner(learner.id);
     
-    // Envoi d'email de confirmation (simulation)
     sendEmailConfirmation(email, name);
     
     errorDiv.textContent = '';
@@ -491,7 +446,7 @@ async function resetPassword(e) {
     const learner = learners.find(l => l.username === username && l.email === email);
     if (learner) {
         learner.password = newPassword;
-        await saveLearners();
+        await saveLearner(learner);
         errorDiv.className = 'success-message';
         errorDiv.innerHTML = '✅ Mot de passe réinitialisé avec succès !';
         setTimeout(() => {
@@ -574,10 +529,10 @@ async function addLearner(e) {
     };
     
     learners.push(learner);
-    await saveLearners();
+    await saveLearner(learner);
     
     progress[learner.id] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
-    await saveProgress();
+    await saveProgressForLearner(learner.id);
     
     renderLearners();
     document.getElementById('learner-form').reset();
@@ -641,7 +596,7 @@ window.editLearner = async function(id) {
         learner.password = newPassword;
         learner.email = newEmail;
         learner.phone = newPhone;
-        await saveLearners();
+        await saveLearner(learner);
         renderLearners();
         updateTrackingSelect();
         updateCertificateSelect();
@@ -655,9 +610,8 @@ window.deleteLearner = async function(id) {
     if (confirm('Supprimer cet apprenant ?')) {
         learners = learners.filter(l => l.id !== id);
         delete progress[id];
-        await saveLearners();
-        await saveProgress();
-        await deleteFromFirebase('learners', id);
+        await deleteLearnerFromFirebase(id);
+        await saveProgressForLearner(id); // pour supprimer aussi
         renderLearners();
         updateTrackingSelect();
         updateCertificateSelect();
@@ -681,14 +635,16 @@ async function addCourse(e) {
         return;
     }
     
-    courses.push({
+    const course = {
         id: Date.now(),
         title,
         description,
         videoUrl,
         level
-    });
-    await saveCourses();
+    };
+    
+    courses.push(course);
+    await saveCourse(course);
     renderCourses();
     updateCourseSelects();
     loadLearnerDashboard();
@@ -739,7 +695,7 @@ window.editCourse = async function(id) {
         course.description = newDesc;
         course.videoUrl = newVideo;
         course.level = newLevel;
-        await saveCourses();
+        await saveCourse(course);
         renderCourses();
         updateCourseSelects();
         loadLearnerDashboard();
@@ -751,8 +707,7 @@ window.deleteCourse = async function(id) {
     if (!checkAdmin()) return;
     if (confirm('Supprimer ce cours ?')) {
         courses = courses.filter(c => c.id !== id);
-        await saveCourses();
-        await deleteFromFirebase('courses', id);
+        await deleteCourseFromFirebase(id);
         renderCourses();
         updateCourseSelects();
         loadLearnerDashboard();
@@ -817,13 +772,15 @@ async function addQuiz(e) {
         return;
     }
     
-    quizzes.push({
+    const quiz = {
         id: Date.now(),
         courseId,
         title,
         questions
-    });
-    await saveQuizzes();
+    };
+    
+    quizzes.push(quiz);
+    await saveQuiz(quiz);
     renderQuizzes();
     document.getElementById('quiz-form').reset();
     document.getElementById('questions-container').innerHTML = `
@@ -989,14 +946,14 @@ window.editQuiz = async function(quizId) {
         quiz.courseId = courseId;
         quiz.title = title;
         quiz.questions = updatedQuestions;
-        await saveQuizzes();
+        await saveQuiz(quiz);
         
         for (let learnerId in progress) {
             if (progress[learnerId].quizAttempts && progress[learnerId].quizAttempts[quizId]) {
                 delete progress[learnerId].quizAttempts[quizId];
+                await saveProgressForLearner(learnerId);
             }
         }
-        await saveProgress();
         
         renderQuizzes();
         loadLearnerDashboard();
@@ -1013,8 +970,7 @@ window.deleteQuiz = async function(id) {
     if (!checkAdmin()) return;
     if (confirm('Supprimer ce quiz ?')) {
         quizzes = quizzes.filter(q => q.id !== id);
-        await saveQuizzes();
-        await deleteFromFirebase('quizzes', id);
+        await deleteQuizFromFirebase(id);
         renderQuizzes();
         loadLearnerDashboard();
         showAlert('Quiz supprimé', 'success');
@@ -1036,7 +992,7 @@ function loadLearnerDashboard() {
     
     if (!progress[currentUser.id]) {
         progress[currentUser.id] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
-        saveProgress();
+        saveProgressForLearner(currentUser.id);
     }
     
     checkAndShowCertificateAlert(currentUser.id);
@@ -1104,7 +1060,6 @@ function loadLearnerDashboard() {
     
     myCoursesDiv.innerHTML = coursesHtml;
     
-    // Quiz
     const quizzesForLearner = quizzes.filter(q => learner.enrolledCourses.includes(q.courseId));
     let quizzesHtml = '<h3><i class="fas fa-puzzle-piece"></i> Mes quiz</h3>';
     
@@ -1139,10 +1094,10 @@ window.enrollCourse = async function(learnerId, courseId) {
     const learner = learners.find(l => l.id === learnerId);
     if (learner && !learner.enrolledCourses.includes(courseId)) {
         learner.enrolledCourses.push(courseId);
-        await saveLearners();
+        await saveLearner(learner);
         if (!progress[learnerId]) {
             progress[learnerId] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
-            await saveProgress();
+            await saveProgressForLearner(learnerId);
         }
         showAlert('✅ Inscription au cours réussie !', 'success');
         loadLearnerDashboard();
@@ -1156,7 +1111,7 @@ window.markCourseCompleted = async function(learnerId, courseId) {
     }
     if (!progress[learnerId].completedCourses.includes(courseId)) {
         progress[learnerId].completedCourses.push(courseId);
-        await saveProgress();
+        await saveProgressForLearner(learnerId);
         showAlert('✅ Cours marqué comme complété !', 'success');
         loadLearnerDashboard();
     }
@@ -1176,7 +1131,7 @@ function checkAndShowCertificateAlert(learnerId) {
     if (globalProgress >= 70 && totalCourses > 0 && !learnerProgress.certificateDelivered) {
         learnerProgress.certificateDelivered = true;
         learnerProgress.certificateDate = new Date().toISOString();
-        saveProgress();
+        saveProgressForLearner(learnerId);
         
         sendCertificateEmail(learner.email, learner.name);
         
@@ -1265,7 +1220,7 @@ async function evaluateQuiz(learnerId, quizId) {
     }
     
     progress[learnerId].quizAttempts[quizId] = { score, percentage };
-    await saveProgress();
+    await saveProgressForLearner(learnerId);
     
     if (percentage >= 70) {
         resultDiv.innerHTML += `<p style="color:green;"><i class="fas fa-check-circle"></i> Félicitations ! Quiz réussi !</p>`;
@@ -1607,7 +1562,7 @@ async function sendMessage(e) {
     };
     
     messages.push(message);
-    await saveMessages();
+    await saveMessage(message);
     
     document.getElementById('message-form').reset();
     loadMessages();
@@ -1650,43 +1605,18 @@ function loadMessages() {
     }).join('');
 }
 
-window.viewMessage = function(messageId) {
+window.viewMessage = async function(messageId) {
     const message = messages.find(m => m.id === messageId);
     if (!message) return;
     
     if (!message.read && message.toId == currentUser.id) {
         message.read = true;
-        saveMessages();
+        await saveMessage(message);
         loadMessages();
     }
     
     alert(`Sujet: ${message.subject}\n\nDe: ${message.fromName}\n\nMessage:\n${message.content}`);
 };
-
-function cleanOldMessages() {
-    const now = new Date();
-    let modified = false;
-    
-    messages = messages.filter(message => {
-        const messageDate = new Date(message.date);
-        const hoursDiff = (now - messageDate) / (1000 * 60 * 60);
-        
-        if (hoursDiff < 24) {
-            return true;
-        } else {
-            modified = true;
-            return false;
-        }
-    });
-    
-    if (modified) {
-        saveMessages();
-        if (document.getElementById('messages-tab').classList.contains('active')) {
-            loadMessages();
-        }
-        showAlert('Messages de plus de 24h supprimés','info');
-    }
-}
 
 // ==================== SUIVI GLOBAL ====================
 function updateTrackingSelect() {
