@@ -1,49 +1,190 @@
+// ==================== CONFIGURATION FIREBASE ====================
+const firebaseConfig = {
+  apiKey: "AIzaSyDMgt6uOkaE9o9aXedKcpAkFOH4qeXromk",
+  authDomain: "e-learning-pro-b435d.firebaseapp.com",
+  projectId: "e-learning-pro-b435d",
+  storageBucket: "e-learning-pro-b435d.firebasestorage.app",
+  messagingSenderId: "1012778875341",
+  appId: "1:1012778875341:web:4fb1d0490b7b306fcb2c84",
+  measurementId: "G-W7R15JBYW0"
+};
+
+// Initialiser Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
 // ==================== STRUCTURES DE DONNÉES ====================
-let learners = JSON.parse(localStorage.getItem('learners')) || [];
-let courses = JSON.parse(localStorage.getItem('courses')) || [];
-let quizzes = JSON.parse(localStorage.getItem('quizzes')) || [];
-let progress = JSON.parse(localStorage.getItem('progress')) || {};
+let learners = [];
+let courses = [];
+let quizzes = [];
+let progress = {};
+let messages = [];
 let currentUser = null;
+let syncInProgress = false;
 
 // Compte admin prédéfini
-const ADMIN_USERNAME = "54128536";
+const ADMIN_USERNAME = "Steph";
 const ADMIN_PASSWORD = "Steffmilli00";
 
-// ==================== INITIALISATION ====================
-function init() {
-    // Charger les données
+// ==================== SYNCHRONISATION FIREBASE ====================
+async function syncFromFirebase() {
+    if (syncInProgress) return;
+    syncInProgress = true;
+    
+    try {
+        // Récupérer les apprenants
+        const learnersSnapshot = await db.collection('learners').get();
+        learners = [];
+        learnersSnapshot.forEach(doc => {
+            learners.push({ id: parseInt(doc.id), ...doc.data() });
+        });
+        
+        // Récupérer les cours
+        const coursesSnapshot = await db.collection('courses').get();
+        courses = [];
+        coursesSnapshot.forEach(doc => {
+            courses.push({ id: parseInt(doc.id), ...doc.data() });
+        });
+        
+        // Récupérer les quiz
+        const quizzesSnapshot = await db.collection('quizzes').get();
+        quizzes = [];
+        quizzesSnapshot.forEach(doc => {
+            quizzes.push({ id: parseInt(doc.id), ...doc.data() });
+        });
+        
+        // Récupérer les progrès
+        const progressSnapshot = await db.collection('progress').get();
+        progress = {};
+        progressSnapshot.forEach(doc => {
+            progress[doc.id] = doc.data();
+        });
+        
+        // Récupérer les messages
+        const messagesSnapshot = await db.collection('messages').get();
+        messages = [];
+        messagesSnapshot.forEach(doc => {
+            messages.push({ id: parseInt(doc.id), ...doc.data() });
+        });
+        
+        // Sauvegarder localement
+        saveToLocalStorage();
+        
+        // Rafraîchir l'interface
+        if (currentUser) {
+            refreshUI();
+        }
+        
+        console.log('Synchronisation réussie');
+    } catch (error) {
+        console.error('Erreur de synchronisation:', error);
+        showAlert('Erreur de synchronisation avec le cloud', 'error');
+    } finally {
+        syncInProgress = false;
+    }
+}
+
+async function syncToFirebase(collection, data, id) {
+    try {
+        await db.collection(collection).doc(id.toString()).set(data);
+    } catch (error) {
+        console.error(`Erreur sync ${collection}:`, error);
+    }
+}
+
+async function deleteFromFirebase(collection, id) {
+    try {
+        await db.collection(collection).doc(id.toString()).delete();
+    } catch (error) {
+        console.error(`Erreur suppression ${collection}:`, error);
+    }
+}
+
+function saveToLocalStorage() {
+    localStorage.setItem('learners', JSON.stringify(learners));
+    localStorage.setItem('courses', JSON.stringify(courses));
+    localStorage.setItem('quizzes', JSON.stringify(quizzes));
+    localStorage.setItem('progress', JSON.stringify(progress));
+    localStorage.setItem('messages', JSON.stringify(messages));
+}
+
+function loadFromLocalStorage() {
     learners = JSON.parse(localStorage.getItem('learners')) || [];
     courses = JSON.parse(localStorage.getItem('courses')) || [];
     quizzes = JSON.parse(localStorage.getItem('quizzes')) || [];
     progress = JSON.parse(localStorage.getItem('progress')) || {};
+    messages = JSON.parse(localStorage.getItem('messages')) || [];
+}
+
+// Sauvegardes avec sync Firebase
+async function saveLearners() {
+    saveToLocalStorage();
+    for (let learner of learners) {
+        await syncToFirebase('learners', learner, learner.id);
+    }
+}
+
+async function saveCourses() {
+    saveToLocalStorage();
+    for (let course of courses) {
+        await syncToFirebase('courses', course, course.id);
+    }
+}
+
+async function saveQuizzes() {
+    saveToLocalStorage();
+    for (let quiz of quizzes) {
+        await syncToFirebase('quizzes', quiz, quiz.id);
+    }
+}
+
+async function saveProgress() {
+    saveToLocalStorage();
+    for (let learnerId in progress) {
+        await syncToFirebase('progress', progress[learnerId], learnerId);
+    }
+}
+
+async function saveMessages() {
+    saveToLocalStorage();
+    for (let message of messages) {
+        await syncToFirebase('messages', message, message.id);
+    }
+}
+
+// ==================== INITIALISATION ====================
+async function init() {
+    // Charger les données locales d'abord
+    loadFromLocalStorage();
     
-    // Ajouter un cours de démonstration si aucun cours n'existe
+    // Ajouter un cours de démonstration si vide
     if (courses.length === 0) {
         courses.push({
             id: Date.now(),
             title: "Introduction à JavaScript",
-            description: "Apprenez les bases de JavaScript, le langage de programmation du web.",
+            description: "Apprenez les bases de JavaScript, le langage de programmation du web moderne.",
             videoUrl: "https://www.youtube.com/watch?v=hdI2bqOjy3c",
             level: "Débutant"
         });
-        localStorage.setItem('courses', JSON.stringify(courses));
+        await saveCourses();
     }
     
-    // Vérifier si l'utilisateur est déjà connecté
+    // Synchroniser avec Firebase
+    await syncFromFirebase();
+    
+    // Configurer écouteurs en temps réel
+    setupRealtimeListeners();
+    
+    // Vérifier session
     const savedSession = localStorage.getItem('currentUser');
     if (savedSession) {
         try {
             currentUser = JSON.parse(savedSession);
-            if (currentUser.role === 'admin') {
+            if (currentUser.role === 'admin' || learners.find(l => l.id === currentUser.id)) {
                 loginSuccess(currentUser);
             } else {
-                const learnerExists = learners.find(l => l.id === currentUser.id);
-                if (learnerExists) {
-                    loginSuccess(currentUser);
-                } else {
-                    localStorage.removeItem('currentUser');
-                    showLoginScreen();
-                }
+                localStorage.removeItem('currentUser');
+                showLoginScreen();
             }
         } catch(e) {
             localStorage.removeItem('currentUser');
@@ -54,6 +195,85 @@ function init() {
     }
     
     setupEventListeners();
+}
+
+function setupRealtimeListeners() {
+    // Écouter les changements sur les apprenants
+    db.collection('learners').onSnapshot((snapshot) => {
+        if (!syncInProgress) {
+            snapshot.docChanges().forEach(async (change) => {
+                if (change.type === 'added' || change.type === 'modified') {
+                    const learner = { id: parseInt(change.doc.id), ...change.doc.data() };
+                    const index = learners.findIndex(l => l.id === learner.id);
+                    if (index === -1) {
+                        learners.push(learner);
+                    } else {
+                        learners[index] = learner;
+                    }
+                } else if (change.type === 'removed') {
+                    learners = learners.filter(l => l.id !== parseInt(change.doc.id));
+                }
+            });
+            saveToLocalStorage();
+            if (currentUser) refreshUI();
+        }
+    });
+    
+    // Écouter les changements sur les cours
+    db.collection('courses').onSnapshot((snapshot) => {
+        if (!syncInProgress) {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === 'added' || change.type === 'modified') {
+                    const course = { id: parseInt(change.doc.id), ...change.doc.data() };
+                    const index = courses.findIndex(c => c.id === course.id);
+                    if (index === -1) {
+                        courses.push(course);
+                    } else {
+                        courses[index] = course;
+                    }
+                } else if (change.type === 'removed') {
+                    courses = courses.filter(c => c.id !== parseInt(change.doc.id));
+                }
+            });
+            saveToLocalStorage();
+            if (currentUser) refreshUI();
+        }
+    });
+    
+    // Écouter les changements sur les quiz
+    db.collection('quizzes').onSnapshot((snapshot) => {
+        if (!syncInProgress) {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === 'added' || change.type === 'modified') {
+                    const quiz = { id: parseInt(change.doc.id), ...change.doc.data() };
+                    const index = quizzes.findIndex(q => q.id === quiz.id);
+                    if (index === -1) {
+                        quizzes.push(quiz);
+                    } else {
+                        quizzes[index] = quiz;
+                    }
+                } else if (change.type === 'removed') {
+                    quizzes = quizzes.filter(q => q.id !== parseInt(change.doc.id));
+                }
+            });
+            saveToLocalStorage();
+            if (currentUser) refreshUI();
+        }
+    });
+}
+
+function refreshUI() {
+    if (currentUser) {
+        renderLearners();
+        renderCourses();
+        renderQuizzes();
+        updateCourseSelects();
+        loadLearnerDashboard();
+        updateTrackingSelect();
+        updateCertificateSelect();
+        loadMessages();
+        updateMessageRecipients();
+    }
 }
 
 // ==================== AUTHENTIFICATION ====================
@@ -68,95 +288,73 @@ function loginSuccess(user) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-app').style.display = 'block';
     
-    // Afficher les infos utilisateur
+    // Afficher infos
     document.getElementById('user-name-display').textContent = user.name;
     const roleBadge = document.getElementById('user-role-badge');
     if (user.role === 'admin') {
-        roleBadge.textContent = 'MILLOGO Sèko Yves Stéphane';
+        roleBadge.textContent = 'Administrateur';
         roleBadge.className = 'role-badge admin';
     } else {
-        roleBadge.textContent ='Apprenant';
+        roleBadge.textContent = 'Apprenant';
         roleBadge.className = 'role-badge learner';
     }
     
-    // Masquer/afficher les onglets admin
+    // Masquer/afficher onglets admin
     const adminTabs = document.querySelectorAll('.admin-only');
     if (user.role === 'admin') {
         adminTabs.forEach(tab => tab.classList.remove('hidden'));
     } else {
         adminTabs.forEach(tab => tab.classList.add('hidden'));
-        // Rediriger vers le dashboard si l'apprenant essaie d'aller ailleurs
         switchTab('dashboard');
     }
     
-    // Charger les données
-    renderLearners();
-    renderCourses();
-    renderQuizzes();
-    updateCourseSelects();
-    loadLearnerDashboard();
-    updateTrackingSelect();
+    // Charger données
+    refreshUI();
 }
 
 function setupEventListeners() {
-    // Onglets de connexion/inscription
+    // Onglets connexion
     document.querySelectorAll('.login-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchLoginTab(btn.dataset.loginTab));
     });
     
-    // Formulaire de connexion
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
-    }
-    
-    // Formulaire d'inscription
-    const registerForm = document.getElementById('register-form');
-    if (registerForm) {
-        registerForm.addEventListener('submit', handleRegister);
-    }
-    
-    // Déconnexion
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', logout);
-    }
+    // Formulaires
+    document.getElementById('login-form').addEventListener('submit', handleLogin);
+    document.getElementById('register-form').addEventListener('submit', handleRegister);
+    document.getElementById('logout-btn').addEventListener('click', logout);
     
     // Onglets principaux
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
-
+    
     // Formulaires admin
-    const learnerForm = document.getElementById('learner-form');
-    if (learnerForm) learnerForm.addEventListener('submit', addLearner);
-    
-    const courseForm = document.getElementById('course-form');
-    if (courseForm) courseForm.addEventListener('submit', addCourse);
-    
-    const quizForm = document.getElementById('quiz-form');
-    if (quizForm) quizForm.addEventListener('submit', addQuiz);
-    
-    const addQuestionBtn = document.getElementById('add-question');
-    if (addQuestionBtn) addQuestionBtn.addEventListener('click', addQuestion);
+    document.getElementById('learner-form').addEventListener('submit', addLearner);
+    document.getElementById('course-form').addEventListener('submit', addCourse);
+    document.getElementById('quiz-form').addEventListener('submit', addQuiz);
+    document.getElementById('add-question').addEventListener('click', addQuestion);
     
     // Recherches
-    const learnerSearch = document.getElementById('learner-search');
-    if (learnerSearch) learnerSearch.addEventListener('input', (e) => renderLearners(e.target.value));
-    
-    const courseSearch = document.getElementById('course-search');
-    if (courseSearch) courseSearch.addEventListener('input', (e) => renderCourses(e.target.value));
+    document.getElementById('learner-search').addEventListener('input', (e) => renderLearners(e.target.value));
+    document.getElementById('course-search').addEventListener('input', (e) => renderCourses(e.target.value));
     
     // Suivi
-    const trackingLearner = document.getElementById('tracking-learner');
-    if (trackingLearner) trackingLearner.addEventListener('change', (e) => showTracking(e.target.value));
+    document.getElementById('tracking-learner').addEventListener('change', (e) => showTracking(e.target.value));
+    
+    // Messages
+    document.getElementById('message-form').addEventListener('submit', sendMessage);
     
     // Modal
-    const closeBtn = document.querySelector('.close');
-    if (closeBtn) closeBtn.addEventListener('click', () => closeModal());
+    document.querySelector('.close').addEventListener('click', () => closeModal());
     window.addEventListener('click', (e) => {
         const modal = document.getElementById('quiz-modal');
         if (e.target === modal) closeModal();
+    });
+    
+    // Certificats
+    document.getElementById('certificate-learner').addEventListener('change', () => {
+        const learnerId = document.getElementById('certificate-learner').value;
+        if (learnerId) previewCertificate(learnerId);
     });
 }
 
@@ -179,7 +377,7 @@ function handleLogin(e) {
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
         loginSuccess({
             id: 'admin',
-            name: 'Administrateur',
+            name: 'MILLOGO S. Yves Stéphane',
             username: ADMIN_USERNAME,
             role: 'admin'
         });
@@ -203,7 +401,7 @@ function handleLogin(e) {
     errorDiv.textContent = 'Nom d\'utilisateur ou mot de passe incorrect';
 }
 
-function handleRegister(e) {
+async function handleRegister(e) {
     e.preventDefault();
     const name = document.getElementById('reg-name').value.trim();
     const username = document.getElementById('reg-username').value.trim();
@@ -217,13 +415,16 @@ function handleRegister(e) {
         return;
     }
     
-    // Vérifier si le nom d'utilisateur existe déjà
+    if (password.length < 4) {
+        errorDiv.textContent = 'Le mot de passe doit contenir au moins 4 caractères';
+        return;
+    }
+    
     if (learners.find(l => l.username === username)) {
         errorDiv.textContent = 'Ce nom d\'utilisateur existe déjà';
         return;
     }
     
-    // Vérifier si c'est le compte admin
     if (username === ADMIN_USERNAME) {
         errorDiv.textContent = 'Ce nom d\'utilisateur est réservé';
         return;
@@ -240,39 +441,77 @@ function handleRegister(e) {
     };
     
     learners.push(learner);
-    localStorage.setItem('learners', JSON.stringify(learners));
+    await saveLearners();
     
-    // Initialiser la progression
-    progress[learner.id] = { completedCourses: [], quizAttempts: {} };
-    localStorage.setItem('progress', JSON.stringify(progress));
+    progress[learner.id] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
+    await saveProgress();
+    
+    // Envoi d'email de confirmation (simulation)
+    sendEmailConfirmation(email, name);
     
     errorDiv.textContent = '';
     errorDiv.className = 'success-message';
-    errorDiv.textContent = '✅ Compte créé avec succès ! Vous pouvez maintenant vous connecter.';
+    errorDiv.innerHTML = '✅ Compte créé avec succès ! Un email de confirmation a été envoyé.';
     
-    // Réinitialiser le formulaire
     document.getElementById('register-form').reset();
     
-    // Basculer vers l'onglet de connexion après 2 secondes
     setTimeout(() => {
         switchLoginTab('login');
         errorDiv.textContent = '';
         errorDiv.className = 'error-message';
-    }, 2000);
+    }, 3000);
+}
+
+function sendEmailConfirmation(email, name) {
+    console.log(`Email envoyé à ${email}: Bienvenue ${name} sur E-Learning Pro !`);
+    showAlert(`📧 Un email de confirmation a été envoyé à ${email}`, 'success');
+}
+
+function showForgotPassword() {
+    document.getElementById('forgot-password-modal').style.display = 'block';
+    document.getElementById('forgot-password-form').onsubmit = resetPassword;
+}
+
+function closeForgotPasswordModal() {
+    document.getElementById('forgot-password-modal').style.display = 'none';
+}
+
+async function resetPassword(e) {
+    e.preventDefault();
+    const username = document.getElementById('forgot-username').value.trim();
+    const email = document.getElementById('forgot-email').value.trim();
+    const newPassword = document.getElementById('new-password').value;
+    const errorDiv = document.getElementById('forgot-error');
+    
+    if (newPassword.length < 4) {
+        errorDiv.textContent = 'Le mot de passe doit contenir au moins 4 caractères';
+        return;
+    }
+    
+    const learner = learners.find(l => l.username === username && l.email === email);
+    if (learner) {
+        learner.password = newPassword;
+        await saveLearners();
+        errorDiv.className = 'success-message';
+        errorDiv.innerHTML = '✅ Mot de passe réinitialisé avec succès !';
+        setTimeout(() => {
+            closeForgotPasswordModal();
+            errorDiv.textContent = '';
+        }, 2000);
+    } else {
+        errorDiv.textContent = 'Nom d\'utilisateur ou email incorrect';
+    }
 }
 
 function logout() {
     currentUser = null;
     localStorage.removeItem('currentUser');
     showLoginScreen();
-    document.getElementById('login-form').reset();
-    document.getElementById('register-form').reset();
 }
 
-// ==================== VÉRIFICATION DES DROITS ====================
 function checkAdmin() {
     if (!currentUser || currentUser.role !== 'admin') {
-        showAlert('Accès refusé. Seul l\'administrateur peut effectuer cette action.', 'error');
+        showAlert('Accès réservé à l\'administrateur', 'error');
         return false;
     }
     return true;
@@ -281,16 +520,25 @@ function checkAdmin() {
 function showAlert(message, type = 'info') {
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert-message ${type}`;
-    alertDiv.textContent = message;
+    alertDiv.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${message}`;
+    alertDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#28a745' : '#dc3545'};
+        color: white;
+        border-radius: 10px;
+        z-index: 2000;
+        animation: slideIn 0.3s;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    `;
     document.body.appendChild(alertDiv);
-    
-    setTimeout(() => {
-        alertDiv.remove();
-    }, 3000);
+    setTimeout(() => alertDiv.remove(), 4000);
 }
 
-// ==================== GESTION DES APPRENANTS (Admin uniquement) ====================
-function addLearner(e) {
+// ==================== GESTION APPRENANTS ====================
+async function addLearner(e) {
     e.preventDefault();
     if (!checkAdmin()) return;
     
@@ -301,11 +549,15 @@ function addLearner(e) {
     const phone = document.getElementById('learner-phone').value.trim();
     
     if (!name || !username || !password || !email) {
-        alert('Les champs nom, nom d\'utilisateur, mot de passe et email sont obligatoires');
+        alert('Tous les champs obligatoires doivent être remplis');
         return;
     }
     
-    // Vérifier si le nom d'utilisateur existe déjà
+    if (password.length < 4) {
+        alert('Le mot de passe doit contenir au moins 4 caractères');
+        return;
+    }
+    
     if (learners.find(l => l.username === username)) {
         alert('Ce nom d\'utilisateur existe déjà');
         return;
@@ -322,15 +574,16 @@ function addLearner(e) {
     };
     
     learners.push(learner);
-    localStorage.setItem('learners', JSON.stringify(learners));
+    await saveLearners();
     
-    // Initialiser la progression
-    progress[learner.id] = { completedCourses: [], quizAttempts: {} };
-    localStorage.setItem('progress', JSON.stringify(progress));
+    progress[learner.id] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
+    await saveProgress();
     
     renderLearners();
     document.getElementById('learner-form').reset();
     updateTrackingSelect();
+    updateCertificateSelect();
+    updateMessageRecipients();
     showAlert('Apprenant ajouté avec succès', 'success');
 }
 
@@ -338,13 +591,10 @@ function renderLearners(searchTerm = '') {
     const container = document.getElementById('learners-list');
     if (!container) return;
     
-    const searchInput = document.getElementById('learner-search');
-    const term = searchTerm || (searchInput ? searchInput.value.toLowerCase() : '');
-    
+    const term = searchTerm || document.getElementById('learner-search')?.value.toLowerCase() || '';
     const filtered = learners.filter(l => 
         l.name.toLowerCase().includes(term) || 
-        l.email.toLowerCase().includes(term) ||
-        l.username.toLowerCase().includes(term)
+        l.email.toLowerCase().includes(term)
     );
     
     if (filtered.length === 0) {
@@ -352,40 +602,38 @@ function renderLearners(searchTerm = '') {
         return;
     }
     
-    // Seul l'admin peut voir les boutons de modification/suppression
-    const isAdmin = currentUser && currentUser.role === 'admin';
-    
     container.innerHTML = filtered.map(learner => `
         <div class="card">
-            <h3>${escapeHtml(learner.name)}</h3>
-            <p>👤 ${escapeHtml(learner.username)}</p>
-            <p>📧 ${escapeHtml(learner.email)}</p>
-            <p>📞 ${escapeHtml(learner.phone) || 'Non renseigné'}</p>
-            ${isAdmin ? `
+            <h3><i class="fas fa-user-graduate"></i> ${escapeHtml(learner.name)}</h3>
+            <p><i class="fas fa-at"></i> ${escapeHtml(learner.username)}</p>
+            <p><i class="fas fa-envelope"></i> ${escapeHtml(learner.email)}</p>
+            <p><i class="fas fa-phone"></i> ${escapeHtml(learner.phone) || 'Non renseigné'}</p>
             <div class="card-actions">
-                <button class="edit-btn" onclick="editLearner(${learner.id})">✏️ Modifier</button>
-                <button class="delete-btn" onclick="deleteLearner(${learner.id})">🗑️ Supprimer</button>
+                <button class="edit-btn" onclick="editLearner(${learner.id})"><i class="fas fa-edit"></i> Modifier</button>
+                <button class="delete-btn" onclick="deleteLearner(${learner.id})"><i class="fas fa-trash"></i> Supprimer</button>
             </div>
-            ` : ''}
         </div>
     `).join('');
 }
 
-window.editLearner = function(id) {
+window.editLearner = async function(id) {
     if (!checkAdmin()) return;
-    
     const learner = learners.find(l => l.id === id);
     if (!learner) return;
     
     const newName = prompt('Nouveau nom :', learner.name);
     const newUsername = prompt('Nouveau nom d\'utilisateur :', learner.username);
-    const newPassword = prompt('Nouveau mot de passe :', learner.password);
+    const newPassword = prompt('Nouveau mot de passe (min. 4) :', learner.password);
     const newEmail = prompt('Nouvel email :', learner.email);
     const newPhone = prompt('Nouveau téléphone :', learner.phone);
     
     if (newName && newUsername && newPassword && newEmail) {
+        if (newPassword.length < 4) {
+            alert('Le mot de passe doit contenir au moins 4 caractères');
+            return;
+        }
         if (newUsername !== learner.username && learners.find(l => l.username === newUsername)) {
-            alert('Ce nom d\'utilisateur est déjà utilisé');
+            alert('Ce nom d\'utilisateur existe déjà');
             return;
         }
         learner.name = newName;
@@ -393,29 +641,33 @@ window.editLearner = function(id) {
         learner.password = newPassword;
         learner.email = newEmail;
         learner.phone = newPhone;
-        localStorage.setItem('learners', JSON.stringify(learners));
+        await saveLearners();
         renderLearners();
         updateTrackingSelect();
+        updateCertificateSelect();
+        updateMessageRecipients();
         showAlert('Apprenant modifié avec succès', 'success');
     }
 };
 
-window.deleteLearner = function(id) {
+window.deleteLearner = async function(id) {
     if (!checkAdmin()) return;
-    
-    if (confirm('Supprimer cet apprenant ? Cette action est irréversible.')) {
+    if (confirm('Supprimer cet apprenant ?')) {
         learners = learners.filter(l => l.id !== id);
         delete progress[id];
-        localStorage.setItem('learners', JSON.stringify(learners));
-        localStorage.setItem('progress', JSON.stringify(progress));
+        await saveLearners();
+        await saveProgress();
+        await deleteFromFirebase('learners', id);
         renderLearners();
         updateTrackingSelect();
-        showAlert('Apprenant supprimé avec succès', 'success');
+        updateCertificateSelect();
+        updateMessageRecipients();
+        showAlert('Apprenant supprimé', 'success');
     }
 };
 
-// ==================== GESTION DES COURS (Admin uniquement) ====================
-function addCourse(e) {
+// ==================== GESTION COURS ====================
+async function addCourse(e) {
     e.preventDefault();
     if (!checkAdmin()) return;
     
@@ -429,19 +681,16 @@ function addCourse(e) {
         return;
     }
     
-    const course = {
+    courses.push({
         id: Date.now(),
         title,
         description,
         videoUrl,
         level
-    };
-    
-    courses.push(course);
-    localStorage.setItem('courses', JSON.stringify(courses));
+    });
+    await saveCourses();
     renderCourses();
     updateCourseSelects();
-    document.getElementById('course-form').reset();
     loadLearnerDashboard();
     showAlert('Cours ajouté avec succès', 'success');
 }
@@ -450,9 +699,7 @@ function renderCourses(searchTerm = '') {
     const container = document.getElementById('courses-list');
     if (!container) return;
     
-    const searchInput = document.getElementById('course-search');
-    const term = searchTerm || (searchInput ? searchInput.value.toLowerCase() : '');
-    
+    const term = searchTerm || document.getElementById('course-search')?.value.toLowerCase() || '';
     const filtered = courses.filter(c => 
         c.title.toLowerCase().includes(term) || 
         c.description.toLowerCase().includes(term)
@@ -463,27 +710,22 @@ function renderCourses(searchTerm = '') {
         return;
     }
     
-    const isAdmin = currentUser && currentUser.role === 'admin';
-    
     container.innerHTML = filtered.map(course => `
         <div class="card">
-            <h3>${escapeHtml(course.title)}</h3>
+            <h3><i class="fas fa-book"></i> ${escapeHtml(course.title)}</h3>
             <p>${escapeHtml(course.description.substring(0, 100))}...</p>
             <p><strong>Niveau :</strong> ${course.level}</p>
-            <p><strong>Vidéo :</strong> <a href="${course.videoUrl}" target="_blank">Lien</a></p>
-            ${isAdmin ? `
+            <a href="${course.videoUrl}" target="_blank" class="video-link"><i class="fas fa-play"></i> Voir la vidéo</a>
             <div class="card-actions">
-                <button class="edit-btn" onclick="editCourse(${course.id})">✏️ Modifier</button>
-                <button class="delete-btn" onclick="deleteCourse(${course.id})">🗑️ Supprimer</button>
+                <button class="edit-btn" onclick="editCourse(${course.id})"><i class="fas fa-edit"></i> Modifier</button>
+                <button class="delete-btn" onclick="deleteCourse(${course.id})"><i class="fas fa-trash"></i> Supprimer</button>
             </div>
-            ` : ''}
         </div>
     `).join('');
 }
 
-window.editCourse = function(id) {
+window.editCourse = async function(id) {
     if (!checkAdmin()) return;
-    
     const course = courses.find(c => c.id === id);
     if (!course) return;
     
@@ -497,55 +739,52 @@ window.editCourse = function(id) {
         course.description = newDesc;
         course.videoUrl = newVideo;
         course.level = newLevel;
-        localStorage.setItem('courses', JSON.stringify(courses));
+        await saveCourses();
         renderCourses();
         updateCourseSelects();
         loadLearnerDashboard();
-        showAlert('Cours modifié avec succès', 'success');
+        showAlert('Cours modifié', 'success');
     }
 };
 
-window.deleteCourse = function(id) {
+window.deleteCourse = async function(id) {
     if (!checkAdmin()) return;
-    
     if (confirm('Supprimer ce cours ?')) {
         courses = courses.filter(c => c.id !== id);
-        localStorage.setItem('courses', JSON.stringify(courses));
+        await saveCourses();
+        await deleteFromFirebase('courses', id);
         renderCourses();
         updateCourseSelects();
         loadLearnerDashboard();
-        showAlert('Cours supprimé avec succès', 'success');
+        showAlert('Cours supprimé', 'success');
     }
 };
 
-// ==================== GESTION DES QUIZ (Admin uniquement) ====================
+// ==================== GESTION QUIZ ====================
 function addQuestion() {
-    if (!checkAdmin()) return;
-    
     const container = document.getElementById('questions-container');
     const questionDiv = document.createElement('div');
     questionDiv.className = 'question-item';
     questionDiv.innerHTML = `
         <input type="text" placeholder="Question" class="question-text" required>
-        <input type="text" placeholder="Option 1" class="option-input" required>
-        <input type="text" placeholder="Option 2" class="option-input" required>
-        <input type="text" placeholder="Option 3" class="option-input" required>
+        <div class="options-container">
+            <input type="text" placeholder="Option 1" class="option-input" required>
+            <input type="text" placeholder="Option 2" class="option-input" required>
+            <input type="text" placeholder="Option 3" class="option-input" required>
+        </div>
         <select class="correct-answer" required>
             <option value="">Bonne réponse</option>
             <option value="0">Option 1</option>
             <option value="1">Option 2</option>
             <option value="2">Option 3</option>
         </select>
-        <button type="button" class="remove-question">❌ Supprimer</button>
+        <button type="button" class="remove-question"><i class="fas fa-trash"></i> Supprimer</button>
     `;
     container.appendChild(questionDiv);
-    
-    questionDiv.querySelector('.remove-question').addEventListener('click', () => {
-        questionDiv.remove();
-    });
+    questionDiv.querySelector('.remove-question').addEventListener('click', () => questionDiv.remove());
 }
 
-function addQuiz(e) {
+async function addQuiz(e) {
     e.preventDefault();
     if (!checkAdmin()) return;
     
@@ -562,9 +801,9 @@ function addQuiz(e) {
     questionItems.forEach(item => {
         const text = item.querySelector('.question-text').value;
         const options = [
-            item.querySelectorAll('.option-input')[0].value,
-            item.querySelectorAll('.option-input')[1].value,
-            item.querySelectorAll('.option-input')[2].value
+            item.querySelectorAll('.option-input')[0]?.value,
+            item.querySelectorAll('.option-input')[1]?.value,
+            item.querySelectorAll('.option-input')[2]?.value
         ];
         const correct = parseInt(item.querySelector('.correct-answer').value);
         
@@ -578,23 +817,23 @@ function addQuiz(e) {
         return;
     }
     
-    const quiz = {
+    quizzes.push({
         id: Date.now(),
         courseId,
         title,
         questions
-    };
-    
-    quizzes.push(quiz);
-    localStorage.setItem('quizzes', JSON.stringify(quizzes));
+    });
+    await saveQuizzes();
     renderQuizzes();
     document.getElementById('quiz-form').reset();
     document.getElementById('questions-container').innerHTML = `
         <div class="question-item">
-            <input type="text" placeholder="Question 1" class="question-text" required>
-            <input type="text" placeholder="Option 1" class="option-input" required>
-            <input type="text" placeholder="Option 2" class="option-input" required>
-            <input type="text" placeholder="Option 3" class="option-input" required>
+            <input type="text" placeholder="Question" class="question-text" required>
+            <div class="options-container">
+                <input type="text" placeholder="Option 1" class="option-input" required>
+                <input type="text" placeholder="Option 2" class="option-input" required>
+                <input type="text" placeholder="Option 3" class="option-input" required>
+            </div>
             <select class="correct-answer" required>
                 <option value="">Bonne réponse</option>
                 <option value="0">Option 1</option>
@@ -615,34 +854,170 @@ function renderQuizzes() {
         return;
     }
     
-    const isAdmin = currentUser && currentUser.role === 'admin';
-    
     container.innerHTML = quizzes.map(quiz => {
         const course = courses.find(c => c.id === quiz.courseId);
         return `
             <div class="card">
-                <h3>${escapeHtml(quiz.title)}</h3>
+                <h3><i class="fas fa-question-circle"></i> ${escapeHtml(quiz.title)}</h3>
                 <p><strong>Cours :</strong> ${course ? course.title : 'Cours supprimé'}</p>
                 <p><strong>Questions :</strong> ${quiz.questions.length}</p>
-                ${isAdmin ? `
                 <div class="card-actions">
-                    <button class="delete-btn" onclick="deleteQuiz(${quiz.id})">🗑️ Supprimer</button>
+                    <button class="edit-btn" onclick="editQuiz(${quiz.id})"><i class="fas fa-edit"></i>Modifier</button>
+                    <button class="delete-btn" onclick="deleteQuiz(${quiz.id})"><i class="fas fa-trash"></i> Supprimer</button>
                 </div>
-                ` : ''}
             </div>
         `;
     }).join('');
 }
 
-window.deleteQuiz = function(id) {
+window.editQuiz = async function(quizId) {
     if (!checkAdmin()) return;
+    const quiz = quizzes.find(q => q.id === quizId);
+    if (!quiz) return;
     
-    if (confirm('Supprimer ce quiz ?')) {
-        quizzes = quizzes.filter(q => q.id !== id);
-        localStorage.setItem('quizzes', JSON.stringify(quizzes));
+    const modal = document.createElement('div');
+    modal.id = 'edit-quiz-modal';
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    
+    let questionsHtml = '';
+    quiz.questions.forEach((q, idx) => {
+        questionsHtml += `
+            <div class="question-item" data-question-index="${idx}">
+                <input type="text" placeholder="Question" class="question-text" value="${escapeHtml(q.text)}" required>
+                <div class="options-container">
+                    <input type="text" placeholder="Option 1" class="option-input" value="${escapeHtml(q.options[0])}" required>
+                    <input type="text" placeholder="Option 2" class="option-input" value="${escapeHtml(q.options[1])}" required>
+                    <input type="text" placeholder="Option 3" class="option-input" value="${escapeHtml(q.options[2])}" required>
+                </div>
+                <select class="correct-answer" required>
+                    <option value="">Bonne réponse</option>
+                    <option value="0" ${q.correct === 0 ? 'selected' : ''}>Option 1</option>
+                    <option value="1" ${q.correct === 1 ? 'selected' : ''}>Option 2</option>
+                    <option value="2" ${q.correct === 2 ? 'selected' : ''}>Option 3</option>
+                </select>
+                <button type="button" class="remove-question"><i class="fas fa-trash"></i> Supprimer</button>
+            </div>
+        `;
+    });
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close">&times;</span>
+            <h3><i class="fas fa-edit"></i> Modifier le quiz : ${escapeHtml(quiz.title)}</h3>
+            <form id="edit-quiz-form">
+                <select id="edit-quiz-course" required>
+                    <option value="">Sélectionner un cours</option>
+                    ${courses.map(c => `<option value="${c.id}" ${c.id === quiz.courseId ? 'selected' : ''}>${escapeHtml(c.title)}</option>`).join('')}
+                </select>
+                <input type="text" id="edit-quiz-title" placeholder="Titre du quiz" value="${escapeHtml(quiz.title)}" required>
+                <div id="edit-questions-container">
+                    ${questionsHtml}
+                </div>
+                <button type="button" id="edit-add-question"><i class="fas fa-plus"></i> Ajouter une question</button>
+                <button type="submit" style="margin-top: 15px;"><i class="fas fa-save"></i> Mettre à jour</button>
+                <button type="button" id="cancel-edit-quiz" style="margin-top: 15px; background: #6c757d;"><i class="fas fa-times"></i> Annuler</button>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const addBtn = document.getElementById('edit-add-question');
+    addBtn.addEventListener('click', () => {
+        const container = document.getElementById('edit-questions-container');
+        const questionDiv = document.createElement('div');
+        questionDiv.className = 'question-item';
+        questionDiv.innerHTML = `
+            <input type="text" placeholder="Question" class="question-text" required>
+            <div class="options-container">
+                <input type="text" placeholder="Option 1" class="option-input" required>
+                <input type="text" placeholder="Option 2" class="option-input" required>
+                <input type="text" placeholder="Option 3" class="option-input" required>
+            </div>
+            <select class="correct-answer" required>
+                <option value="">Bonne réponse</option>
+                <option value="0">Option 1</option>
+                <option value="1">Option 2</option>
+                <option value="2">Option 3</option>
+            </select>
+            <button type="button" class="remove-question"><i class="fas fa-trash"></i> Supprimer</button>
+        `;
+        container.appendChild(questionDiv);
+        questionDiv.querySelector('.remove-question').addEventListener('click', () => questionDiv.remove());
+    });
+    
+    modal.querySelector('.close').addEventListener('click', () => modal.remove());
+    document.getElementById('cancel-edit-quiz').addEventListener('click', () => modal.remove());
+    
+    document.querySelectorAll('#edit-questions-container .remove-question').forEach(btn => {
+        btn.addEventListener('click', () => btn.closest('.question-item').remove());
+    });
+    
+    document.getElementById('edit-quiz-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const courseId = parseInt(document.getElementById('edit-quiz-course').value);
+        const title = document.getElementById('edit-quiz-title').value.trim();
+        const questionItems = document.querySelectorAll('#edit-questions-container .question-item');
+        
+        if (!courseId || !title || questionItems.length === 0) {
+            alert('Veuillez remplir tous les champs');
+            return;
+        }
+        
+        const updatedQuestions = [];
+        questionItems.forEach(item => {
+            const text = item.querySelector('.question-text').value;
+            const options = [
+                item.querySelectorAll('.option-input')[0]?.value,
+                item.querySelectorAll('.option-input')[1]?.value,
+                item.querySelectorAll('.option-input')[2]?.value
+            ];
+            const correct = parseInt(item.querySelector('.correct-answer').value);
+            
+            if (text && options.every(opt => opt) && !isNaN(correct)) {
+                updatedQuestions.push({ text, options, correct });
+            }
+        });
+        
+        if (updatedQuestions.length === 0) {
+            alert('Veuillez ajouter au moins une question valide');
+            return;
+        }
+        
+        quiz.courseId = courseId;
+        quiz.title = title;
+        quiz.questions = updatedQuestions;
+        await saveQuizzes();
+        
+        for (let learnerId in progress) {
+            if (progress[learnerId].quizAttempts && progress[learnerId].quizAttempts[quizId]) {
+                delete progress[learnerId].quizAttempts[quizId];
+            }
+        }
+        await saveProgress();
+        
         renderQuizzes();
         loadLearnerDashboard();
-        showAlert('Quiz supprimé avec succès', 'success');
+        modal.remove();
+        showAlert('Quiz modifié avec succès !', 'success');
+    });
+    
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+};
+
+window.deleteQuiz = async function(id) {
+    if (!checkAdmin()) return;
+    if (confirm('Supprimer ce quiz ?')) {
+        quizzes = quizzes.filter(q => q.id !== id);
+        await saveQuizzes();
+        await deleteFromFirebase('quizzes', id);
+        renderQuizzes();
+        loadLearnerDashboard();
+        showAlert('Quiz supprimé', 'success');
     }
 };
 
@@ -652,69 +1027,60 @@ function loadLearnerDashboard() {
     const myQuizzesDiv = document.getElementById('my-quizzes');
     
     if (!currentUser || currentUser.role !== 'learner') {
-        if (myCoursesDiv) myCoursesDiv.innerHTML = '<p style="text-align:center; color:#999;">Connectez-vous en tant qu\'apprenant pour voir votre tableau de bord</p>';
-        if (myQuizzesDiv) myQuizzesDiv.innerHTML = '';
+        if (myCoursesDiv) myCoursesDiv.innerHTML = '<p style="text-align:center; color:#999;">Connectez-vous en tant qu\'apprenant</p>';
         return;
     }
     
     const learner = learners.find(l => l.id === currentUser.id);
     if (!learner) return;
     
-    // Initialiser progress si nécessaire
     if (!progress[currentUser.id]) {
-        progress[currentUser.id] = { completedCourses: [], quizAttempts: {} };
-        localStorage.setItem('progress', JSON.stringify(progress));
+        progress[currentUser.id] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
+        saveProgress();
     }
     
-    // Vérifier le certificat
-    checkAndShowCertificate(currentUser.id);
+    checkAndShowCertificateAlert(currentUser.id);
     
     const totalCourses = learner.enrolledCourses.length;
     const completedCount = progress[currentUser.id]?.completedCourses.length || 0;
     const globalProgress = totalCourses > 0 ? (completedCount / totalCourses) * 100 : 0;
     
-    // Cours disponibles et suivis
     const availableCourses = courses.filter(c => !learner.enrolledCourses.includes(c.id));
     const enrolledCourses = courses.filter(c => learner.enrolledCourses.includes(c.id));
     
     let coursesHtml = '';
     
-    // Barre de progression globale
     if (totalCourses > 0) {
         coursesHtml += `
             <div class="global-progress-card">
-                <h3>📊 Ma progression globale</h3>
-                <div class="progress-bar" style="height: 20px;">
-                    <div class="progress-fill" style="width: ${globalProgress}%; height: 100%; line-height: 20px; text-align: center; color: white; font-size: 12px;">
-                        ${Math.floor(globalProgress)}%
-                    </div>
+                <h3><i class="fas fa-chart-line"></i> Ma progression globale</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${globalProgress}%">${Math.floor(globalProgress)}%</div>
                 </div>
                 <p>${completedCount}/${totalCourses} cours complétés</p>
-                ${globalProgress >= 70 ? '<p style="color: #28a745; font-weight: bold;">🎓 Félicitations ! Vous êtes éligible au certificat !</p>' : `<p>Encore ${Math.ceil((70 - globalProgress) / 100 * totalCourses)} cours à compléter pour obtenir le certificat</p>`}
+                ${globalProgress >= 70 ? '<p style="color: #28a745; font-weight: bold;"><i class="fas fa-certificate"></i> Félicitations ! Vous êtes éligible au certificat !</p>' : ''}
             </div>
         `;
     }
     
-    // Cours disponibles à l'inscription
     if (availableCourses.length > 0) {
-        coursesHtml += '<h3>📖 Cours disponibles</h3><div class="cards-grid">';
+        coursesHtml += '<h3><i class="fas fa-book-open"></i> Cours disponibles</h3><div class="cards-grid">';
         availableCourses.forEach(course => {
             coursesHtml += `
                 <div class="card">
                     <h3>${escapeHtml(course.title)}</h3>
                     <p>${escapeHtml(course.description.substring(0, 100))}...</p>
                     <p><strong>Niveau :</strong> ${course.level}</p>
-                    <a href="${course.videoUrl}" target="_blank" class="video-link">▶️ Voir la vidéo</a>
-                    <button class="enroll-btn" onclick="enrollCourse(${currentUser.id}, ${course.id})">📚 S'inscrire à ce cours</button>
+                    <a href="${course.videoUrl}" target="_blank" class="video-link"><i class="fas fa-play"></i> Voir la vidéo</a>
+                    <button class="enroll-btn" onclick="enrollCourse(${currentUser.id}, ${course.id})"><i class="fas fa-sign-in-alt"></i> S'inscrire</button>
                 </div>
             `;
         });
         coursesHtml += '</div>';
     }
     
-    // Cours suivis
     if (enrolledCourses.length > 0) {
-        coursesHtml += '<h3>✅ Mes cours suivis</h3><div class="cards-grid">';
+        coursesHtml += '<h3><i class="fas fa-check-circle"></i> Mes cours suivis</h3><div class="cards-grid">';
         enrolledCourses.forEach(course => {
             const isCompleted = progress[currentUser.id]?.completedCourses.includes(course.id);
             coursesHtml += `
@@ -722,25 +1088,25 @@ function loadLearnerDashboard() {
                     <h3>${escapeHtml(course.title)}</h3>
                     <p>${escapeHtml(course.description.substring(0, 100))}...</p>
                     <p><strong>Niveau :</strong> ${course.level}</p>
-                    <a href="${course.videoUrl}" target="_blank" class="video-link">▶️ Voir la vidéo</a>
+                    <a href="${course.videoUrl}" target="_blank" class="video-link"><i class="fas fa-play"></i> Voir la vidéo</a>
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: ${isCompleted ? 100 : 0}%"></div>
                     </div>
                     <p>Statut: ${isCompleted ? '✅ Complété' : '🟡 En cours'}</p>
-                    ${!isCompleted ? `<button class="complete-btn" onclick="markCourseCompleted(${currentUser.id}, ${course.id})">✅ Marquer comme complété</button>` : ''}
+                    ${!isCompleted ? `<button class="complete-btn" onclick="markCourseCompleted(${currentUser.id}, ${course.id})"><i class="fas fa-check"></i> Marquer comme complété</button>` : ''}
                 </div>
             `;
         });
         coursesHtml += '</div>';
-    } else if (totalCourses === 0 && availableCourses.length > 0) {
+    } else if (availableCourses.length > 0) {
         coursesHtml += '<p style="text-align:center; color:#999;">Vous n\'êtes inscrit à aucun cours. Inscrivez-vous ci-dessus !</p>';
     }
     
-    if (myCoursesDiv) myCoursesDiv.innerHTML = coursesHtml;
+    myCoursesDiv.innerHTML = coursesHtml;
     
     // Quiz
     const quizzesForLearner = quizzes.filter(q => learner.enrolledCourses.includes(q.courseId));
-    let quizzesHtml = '<h3>📝 Mes quiz</h3>';
+    let quizzesHtml = '<h3><i class="fas fa-puzzle-piece"></i> Mes quiz</h3>';
     
     if (quizzesForLearner.length === 0) {
         quizzesHtml += '<p style="text-align:center; color:#999;">Aucun quiz disponible pour vos cours.</p>';
@@ -758,56 +1124,95 @@ function loadLearnerDashboard() {
                         <div class="progress-fill" style="width: ${percentage}%"></div>
                     </div>
                     <p>Meilleur score: ${score ? `${score.score}/${quiz.questions.length} (${Math.floor(percentage)}%)` : 'Non tenté'}</p>
-                    <button class="quiz-btn" onclick="startQuiz(${currentUser.id}, ${quiz.id})">${score ? '🔄 Repasser le quiz' : '🎯 Commencer le quiz'}</button>
+                    <button class="quiz-btn" onclick="startQuiz(${currentUser.id}, ${quiz.id})"><i class="fas fa-play"></i> ${score ? 'Repasser' : 'Commencer'}</button>
                 </div>
             `;
         });
         quizzesHtml += '</div>';
     }
     
-    if (myQuizzesDiv) myQuizzesDiv.innerHTML = quizzesHtml;
+    myQuizzesDiv.innerHTML = quizzesHtml;
 }
 
-// ==================== ACTIONS APPRENANT ====================
-window.enrollCourse = function(learnerId, courseId) {
+window.enrollCourse = async function(learnerId, courseId) {
     if (!currentUser || currentUser.role !== 'learner') return;
-    
     const learner = learners.find(l => l.id === learnerId);
     if (learner && !learner.enrolledCourses.includes(courseId)) {
         learner.enrolledCourses.push(courseId);
-        localStorage.setItem('learners', JSON.stringify(learners));
-        
+        await saveLearners();
         if (!progress[learnerId]) {
-            progress[learnerId] = { completedCourses: [], quizAttempts: {} };
-            localStorage.setItem('progress', JSON.stringify(progress));
+            progress[learnerId] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
+            await saveProgress();
         }
-        
         showAlert('✅ Inscription au cours réussie !', 'success');
         loadLearnerDashboard();
-        if (currentUser.role === 'admin' && document.getElementById('tracking-learner')?.value == learnerId) {
-            showTracking(learnerId);
-        }
     }
 };
 
-window.markCourseCompleted = function(learnerId, courseId) {
+window.markCourseCompleted = async function(learnerId, courseId) {
     if (!currentUser || currentUser.role !== 'learner') return;
-    
     if (!progress[learnerId]) {
-        progress[learnerId] = { completedCourses: [], quizAttempts: {} };
+        progress[learnerId] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
     }
-    
     if (!progress[learnerId].completedCourses.includes(courseId)) {
         progress[learnerId].completedCourses.push(courseId);
-        localStorage.setItem('progress', JSON.stringify(progress));
+        await saveProgress();
         showAlert('✅ Cours marqué comme complété !', 'success');
         loadLearnerDashboard();
-        
-        if (currentUser.role === 'admin' && document.getElementById('tracking-learner')?.value == learnerId) {
-            showTracking(learnerId);
-        }
     }
 };
+
+function checkAndShowCertificateAlert(learnerId) {
+    const learner = learners.find(l => l.id == learnerId);
+    if (!learner) return;
+    
+    const learnerProgress = progress[learnerId];
+    if (!learnerProgress) return;
+    
+    const totalCourses = learner.enrolledCourses.length;
+    const completedCount = learnerProgress.completedCourses.length;
+    const globalProgress = totalCourses > 0 ? (completedCount / totalCourses) * 100 : 0;
+    
+    if (globalProgress >= 70 && totalCourses > 0 && !learnerProgress.certificateDelivered) {
+        learnerProgress.certificateDelivered = true;
+        learnerProgress.certificateDate = new Date().toISOString();
+        saveProgress();
+        
+        sendCertificateEmail(learner.email, learner.name);
+        
+        const alertDiv = document.getElementById('certificate-alert');
+        alertDiv.innerHTML = `
+            <div class="certificate-badge">
+                <div class="badge-icon"><i class="fas fa-trophy"></i></div>
+                <div class="badge-content">
+                    <h3><i class="fas fa-certificate"></i> Félicitations !</h3>
+                    <p>Vous avez obtenu votre certificat de réussite !</p>
+                    <button onclick="generateCertificate(${learnerId})" class="certificate-download-btn"><i class="fas fa-download"></i> Télécharger mon certificat</button>
+                    <button onclick="viewCertificate(${learnerId})" class="certificate-view-btn"><i class="fas fa-eye"></i> Voir mon certificat</button>
+                </div>
+            </div>
+        `;
+    } else if (globalProgress >= 70) {
+        const alertDiv = document.getElementById('certificate-alert');
+        if (!alertDiv.innerHTML.includes('certificate-badge')) {
+            alertDiv.innerHTML = `
+                <div class="certificate-badge">
+                    <div class="badge-icon"><i class="fas fa-certificate"></i></div>
+                    <div class="badge-content">
+                        <h3>Mon certificat</h3>
+                        <button onclick="generateCertificate(${learnerId})" class="certificate-download-btn"><i class="fas fa-download"></i> Télécharger mon certificat</button>
+                        <button onclick="viewCertificate(${learnerId})" class="certificate-view-btn"><i class="fas fa-eye"></i> Voir mon certificat</button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+
+function sendCertificateEmail(email, name) {
+    console.log(`Email de certificat envoyé à ${email}: Félicitations ${name} !`);
+    showAlert(`📧 Un email de félicitations a été envoyé à ${email} avec votre certificat`, 'success');
+}
 
 // ==================== QUIZ ====================
 window.startQuiz = function(learnerId, quizId) {
@@ -815,7 +1220,7 @@ window.startQuiz = function(learnerId, quizId) {
     if (!quiz) return;
     
     const modal = document.getElementById('quiz-modal');
-    document.getElementById('modal-quiz-title').textContent = quiz.title;
+    document.getElementById('modal-quiz-title').innerHTML = `<i class="fas fa-question-circle"></i> ${quiz.title}`;
     
     let questionsHtml = '';
     quiz.questions.forEach((q, index) => {
@@ -823,10 +1228,10 @@ window.startQuiz = function(learnerId, quizId) {
             <div class="question-item">
                 <p><strong>Question ${index + 1}:</strong> ${escapeHtml(q.text)}</p>
                 ${q.options.map((opt, optIndex) => `
-                    <label>
+                    <label style="display: block; margin: 10px 0;">
                         <input type="radio" name="q${index}" value="${optIndex}">
                         ${escapeHtml(opt)}
-                    </label><br>
+                    </label>
                 `).join('')}
             </div>
         `;
@@ -836,11 +1241,10 @@ window.startQuiz = function(learnerId, quizId) {
     document.getElementById('modal-result').innerHTML = '';
     modal.style.display = 'block';
     
-    const submitBtn = document.getElementById('submit-quiz-modal');
-    submitBtn.onclick = () => evaluateQuiz(learnerId, quizId);
+    document.getElementById('submit-quiz-modal').onclick = () => evaluateQuiz(learnerId, quizId);
 };
 
-function evaluateQuiz(learnerId, quizId) {
+async function evaluateQuiz(learnerId, quizId) {
     const quiz = quizzes.find(q => q.id === quizId);
     if (!quiz) return;
     
@@ -857,25 +1261,22 @@ function evaluateQuiz(learnerId, quizId) {
     resultDiv.innerHTML = `<p style="font-weight:bold;">Score: ${score}/${quiz.questions.length} (${Math.floor(percentage)}%)</p>`;
     
     if (!progress[learnerId]) {
-        progress[learnerId] = { completedCourses: [], quizAttempts: {} };
+        progress[learnerId] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
     }
     
     progress[learnerId].quizAttempts[quizId] = { score, percentage };
-    localStorage.setItem('progress', JSON.stringify(progress));
+    await saveProgress();
     
     if (percentage >= 70) {
-        resultDiv.innerHTML += `<p style="color:green;">✅ Félicitations ! Vous avez réussi ce quiz !</p>`;
+        resultDiv.innerHTML += `<p style="color:green;"><i class="fas fa-check-circle"></i> Félicitations ! Quiz réussi !</p>`;
     } else {
-        resultDiv.innerHTML += `<p style="color:orange;">⚠️ Vous n'avez pas atteint 70%. Réessayez pour valider !</p>`;
+        resultDiv.innerHTML += `<p style="color:orange;"><i class="fas fa-exclamation-triangle"></i> Score minimum requis : 70%</p>`;
     }
     
     setTimeout(() => {
         closeModal();
         if (currentUser && currentUser.id === learnerId) {
             loadLearnerDashboard();
-        }
-        if (currentUser && currentUser.role === 'admin' && document.getElementById('tracking-learner')?.value == learnerId) {
-            showTracking(learnerId);
         }
     }, 3000);
 }
@@ -885,116 +1286,26 @@ function closeModal() {
 }
 
 // ==================== CERTIFICAT ====================
-function checkAndShowCertificate(learnerId) {
+function generateCertificate(learnerId) {
     const learner = learners.find(l => l.id == learnerId);
-    if (!learner) return false;
+    if (!learner) return;
     
     const learnerProgress = progress[learnerId];
-    if (!learnerProgress) return false;
+    if (!learnerProgress) return;
     
     const totalCourses = learner.enrolledCourses.length;
-    const completedCount = learnerProgress.completedCourses.length;
-    const globalProgress = totalCourses > 0 ? (completedCount / totalCourses) * 100 : 0;
-    
-    const certificateDelivered = learnerProgress.certificateDelivered || false;
-    
-    if (globalProgress >= 70 && totalCourses > 0 && !certificateDelivered) {
-        learnerProgress.certificateDelivered = true;
-        learnerProgress.certificateDate = new Date().toISOString();
-        localStorage.setItem('progress', JSON.stringify(progress));
-        
-        showCertificateNotification(learner);
-        addCertificateBadge(learner, globalProgress);
-        return true;
-    }
-    
-    // Vérifier si le badge doit être affiché (même si déjà délivré, on le montre)
-    if (globalProgress >= 70 && !document.getElementById('certificate-badge')) {
-        addCertificateBadge(learner, globalProgress);
-    }
-    
-    return globalProgress >= 70;
-}
-
-function showCertificateNotification(learner) {
-    const notification = document.createElement('div');
-    notification.className = 'certificate-notification';
-    notification.innerHTML = `
-        <div class="notification-content">
-            <span class="notification-icon">🎓</span>
-            <div>
-                <h4>Félicitations ${escapeHtml(learner.name)} !</h4>
-                <p>Vous avez atteint ${Math.floor(progress[learner.id]?.completedCourses.length / learner.enrolledCourses.length * 100)}% de progression.</p>
-                <p>Votre certificat est prêt à être téléchargé !</p>
-            </div>
-            <button onclick="generateCertificate(${learner.id})" class="notification-btn">📥 Télécharger mon certificat</button>
-            <button class="close-notification">✖</button>
-        </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    notification.querySelector('.close-notification').addEventListener('click', () => {
-        notification.remove();
-    });
-    
-    setTimeout(() => {
-        if (notification.parentNode) notification.remove();
-    }, 10000);
-}
-
-function addCertificateBadge(learner, globalProgress) {
-    const myCoursesDiv = document.getElementById('my-courses');
-    if (!myCoursesDiv) return;
-    
-    if (document.getElementById('certificate-badge')) return;
-    
-    const badgeHtml = `
-        <div id="certificate-badge" class="certificate-badge">
-            <div class="badge-icon">🏆</div>
-            <div class="badge-content">
-                <h3>Certificat disponible !</h3>
-                <p>Félicitations ! Vous avez complété ${Math.floor(globalProgress)}% de votre formation.</p>
-                <button onclick="generateCertificate(${learner.id})" class="certificate-download-btn">
-                    🎓 Télécharger mon certificat
-                </button>
-                <button onclick="viewCertificate(${learner.id})" class="certificate-view-btn">
-                    👁️ Voir mon certificat
-                </button>
-            </div>
-        </div>
-    `;
-    
-    myCoursesDiv.insertAdjacentHTML('afterbegin', badgeHtml);
-}
-
-window.generateCertificate = function(learnerId) {
-    const learner = learners.find(l => l.id == learnerId);
-    if (!learner) {
-        alert("Apprenant non trouvé");
-        return;
-    }
-    
-    const learnerProgress = progress[learnerId];
-    if (!learnerProgress) {
-        alert("Aucune progression enregistrée");
-        return;
-    }
-    
-    const totalCourses = learner.enrolledCourses.length;
-    const completedCourses = learnerProgress.completedCourses.map(courseId => {
+    const completedCoursesList = learnerProgress.completedCourses.map(courseId => {
         const course = courses.find(c => c.id === courseId);
         return course ? course.title : "Cours inconnu";
     });
     
-    const globalProgress = totalCourses > 0 ? (completedCourses.length / totalCourses) * 100 : 0;
+    const globalProgress = totalCourses > 0 ? (completedCoursesList.length / totalCourses) * 100 : 0;
     
     if (globalProgress < 70) {
-        alert(`⚠️ Progression insuffisante : ${globalProgress.toFixed(1)}% (minimum 70% requis pour obtenir le certificat)`);
+        alert(`⚠️ Progression insuffisante : ${globalProgress.toFixed(1)}% (minimum 70% requis)`);
         return;
     }
     
-    // Récupérer les scores des quiz
     const quizScores = [];
     quizzes.forEach(quiz => {
         if (learner.enrolledCourses.includes(quiz.courseId)) {
@@ -1012,18 +1323,26 @@ window.generateCertificate = function(learnerId) {
         }
     });
     
-    const certHtml = `
+    const certHtml = generateCertificateHtml(learner, completedCoursesList, quizScores, globalProgress, learnerProgress);
+    
+    const certWindow = window.open('', '_blank');
+    certWindow.document.write(certHtml);
+    certWindow.document.close();
+}
+
+function generateCertificateHtml(learner, completedCourses, quizScores, globalProgress, learnerProgress) {
+    return `
         <!DOCTYPE html>
         <html lang="fr">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Certificat de réussite - ${learner.name}</title>
+            <title>Certificat - ${learner.name}</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
                 body {
                     font-family: 'Georgia', 'Times New Roman', serif;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: #f0f0f0;
                     min-height: 100vh;
                     display: flex;
                     justify-content: center;
@@ -1031,64 +1350,62 @@ window.generateCertificate = function(learnerId) {
                     padding: 40px;
                 }
                 .certificate {
-                    max-width: 600px;
-                    width: 90%;
+                    max-width: 900px;
+                    width: 100%;
                     background: white;
-                    border-radius: 15px;
-                    box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+                    border-radius: 20px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
                     overflow: hidden;
                 }
                 .certificate-header {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
                     color: white;
                     padding: 40px;
                     text-align: center;
                 }
-                .certificate-header h1 { font-size: 48px; margin-bottom: 10px; letter-spacing: 2px; }
+                .certificate-header h1 { font-size: 42px; margin-bottom: 10px; letter-spacing: 2px; }
                 .certificate-header p { font-size: 18px; opacity: 0.9; }
                 .certificate-body { padding: 50px; text-align: center; }
                 .recipient-name {
-                    font-size: 42px;
-                    color: #667eea;
+                    font-size: 48px;
+                    color: #1e3c72;
                     margin: 30px 0;
                     font-weight: bold;
-                    border-bottom: 3px solid #667eea;
+                    border-bottom: 3px solid #1e3c72;
                     display: inline-block;
                     padding-bottom: 10px;
                 }
                 .congrats { font-size: 24px; color: #333; margin: 20px 0; }
                 .completion-text { font-size: 18px; color: #666; line-height: 1.6; margin: 30px 0; }
                 .course-list {
-                    background: #f5f5f5;
-                    border-radius: 10px;
-                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 15px;
+                    padding: 25px;
                     margin: 30px 0;
                     text-align: left;
                 }
-                .course-list h3 { color: #667eea; margin-bottom: 15px; }
+                .course-list h3 { color: #1e3c72; margin-bottom: 15px; }
                 .course-list ul { list-style: none; padding-left: 0; }
-                .course-list li { padding: 8px 0; border-bottom: 1px solid #ddd; }
-                .course-list li:last-child { border-bottom: none; }
+                .course-list li { padding: 8px 0; border-bottom: 1px solid #e0e0e0; }
                 .course-list li:before { content: "✓ "; color: #28a745; font-weight: bold; margin-right: 10px; }
                 .quiz-scores { margin: 30px 0; text-align: left; }
-                .quiz-scores h3 { color: #667eea; margin-bottom: 15px; }
+                .quiz-scores h3 { color: #1e3c72; margin-bottom: 15px; }
                 .score-item {
                     margin-bottom: 15px;
-                    padding: 10px;
-                    background: #f9f9f9;
-                    border-radius: 8px;
+                    padding: 12px;
+                    background: #f8f9fa;
+                    border-radius: 10px;
                 }
                 .progress-indicator { margin: 30px 0; text-align: center; }
                 .progress-circle {
                     width: 120px;
                     height: 120px;
                     border-radius: 50%;
-                    background: conic-gradient(#667eea 0% ${globalProgress}%, #e0e0e0 ${globalProgress}% 100%);
+                    background: conic-gradient(#1e3c72 0% ${globalProgress}%, #e0e0e0 ${globalProgress}% 100%);
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     margin: 0 auto;
-                    position: relative;
                 }
                 .progress-circle span {
                     background: white;
@@ -1100,15 +1417,21 @@ window.generateCertificate = function(learnerId) {
                     justify-content: center;
                     font-size: 24px;
                     font-weight: bold;
-                    color: #667eea;
+                    color: #1e3c72;
                 }
                 .certificate-footer {
-                    background: #f5f5f5;
+                    background: #f8f9fa;
                     padding: 30px;
                     text-align: center;
                     border-top: 1px solid #e0e0e0;
                 }
-                .signature { margin-top: 20px; font-style: italic; color: #666; }
+                .signature { margin-top: 20px; }
+                .signature-line { 
+                    width: 200px; 
+                    height: 2px; 
+                    background: #333; 
+                    margin: 10px auto; 
+                }
                 .date { color: #999; margin-top: 20px; }
                 @media print {
                     body { background: white; padding: 0; }
@@ -1116,41 +1439,39 @@ window.generateCertificate = function(learnerId) {
                     button { display: none; }
                 }
                 button {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
                     color: white;
                     border: none;
                     padding: 12px 30px;
-                    border-radius: 25px;
+                    border-radius: 30px;
                     font-size: 16px;
                     cursor: pointer;
                     margin: 10px;
-                    transition: transform 0.2s;
                 }
                 button:hover { transform: translateY(-2px); }
-                .print-btn { background: #28a745; }
             </style>
         </head>
         <body>
             <div class="certificate">
                 <div class="certificate-header">
                     <h1>🎓 CERTIFICAT DE RÉUSSITE</h1>
-                    <p>Plateforme E-Learning</p>
+                    <p>E-Learning Pro - Formation en ligne</p>
                 </div>
                 <div class="certificate-body">
                     <p class="congrats">Ce certificat est décerné à</p>
                     <div class="recipient-name">${escapeHtml(learner.name)}</div>
                     <div class="completion-text">
-                        Pour avoir complété avec succès sa formation sur la plateforme E-Learning,
+                        Pour avoir complété avec succès sa formation sur la plateforme E-Learning Pro,
                         démontrant ainsi son engagement et sa maîtrise des compétences acquises.
                     </div>
                     <div class="progress-indicator">
                         <div class="progress-circle">
                             <span>${Math.floor(globalProgress)}%</span>
                         </div>
-                        <p style="margin-top: 10px; color: #666;">Taux de complétion</p>
+                        <p style="margin-top: 10px;">Taux de complétion de la formation</p>
                     </div>
                     <div class="course-list">
-                        <h3>📚 Cours complétés (${completedCourses.length}/${totalCourses})</h3>
+                        <h3>📚 Cours complétés (${completedCourses.length}/${learner.enrolledCourses.length})</h3>
                         <ul>
                             ${completedCourses.map(title => `<li>${escapeHtml(title)}</li>`).join('')}
                         </ul>
@@ -1172,9 +1493,9 @@ window.generateCertificate = function(learnerId) {
                 </div>
                 <div class="certificate-footer">
                     <div class="signature">
-                         MILLOGO S. Yves Stéphane 
-                       <br> _________________________<br>
-                        Le Directeur Pédagogique
+                        <div>MILLOGO S. Yves Stéphane</div>
+                        <div class="signature-line"></div>
+                        <div>Directeur Pédagogique</div>
                     </div>
                     <div class="date">
                         Délivré le ${new Date(learnerProgress.certificateDate || new Date()).toLocaleDateString('fr-FR', {
@@ -1183,39 +1504,207 @@ window.generateCertificate = function(learnerId) {
                             year: 'numeric'
                         })}
                     </div>
-                    <div style="margin-top: 20px;">
-                        <button onclick="window.print()" class="print-btn">🖨️ Imprimer / Enregistrer en PDF</button>
+                    <div>
+                        <button onclick="window.print()"><i class="fas fa-print"></i> Imprimer / PDF</button>
                     </div>
                 </div>
             </div>
-            <script>
-                window.onafterprint = function() { setTimeout(() => window.close(), 500); };
-            <\/script>
         </body>
         </html>
     `;
-    
-    const certWindow = window.open('', '_blank');
-    certWindow.document.write(certHtml);
-    certWindow.document.close();
-};
+}
 
 window.viewCertificate = function(learnerId) {
     generateCertificate(learnerId);
 };
 
-// ==================== SUIVI GLOBAL (ADMIN) ====================
+function viewAdminCertificate() {
+    const learnerId = document.getElementById('certificate-learner').value;
+    if (learnerId) {
+        generateCertificate(learnerId);
+    } else {
+        alert('Veuillez sélectionner un apprenant');
+    }
+}
+
+function downloadAdminCertificate() {
+    const learnerId = document.getElementById('certificate-learner').value;
+    if (learnerId) {
+        generateCertificate(learnerId);
+    } else {
+        alert('Veuillez sélectionner un apprenant');
+    }
+}
+
+function previewCertificate(learnerId) {
+    const learner = learners.find(l => l.id == learnerId);
+    if (!learner) return;
+    
+    const learnerProgress = progress[learnerId];
+    if (!learnerProgress) return;
+    
+    const totalCourses = learner.enrolledCourses.length;
+    const completedCount = learnerProgress.completedCourses.length;
+    const globalProgress = totalCourses > 0 ? (completedCount / totalCourses) * 100 : 0;
+    
+    const previewDiv = document.getElementById('certificate-preview');
+    if (globalProgress >= 70) {
+        previewDiv.innerHTML = `
+            <div class="global-progress-card" style="margin-top: 20px;">
+                <h3><i class="fas fa-certificate"></i> Éligible au certificat</h3>
+                <p>Progression: ${Math.floor(globalProgress)}%</p>
+                <p>${completedCount}/${totalCourses} cours complétés</p>
+                <button onclick="generateCertificate(${learnerId})" class="btn-primary"><i class="fas fa-download"></i> Télécharger le certificat</button>
+                <button onclick="viewCertificate(${learnerId})" class="btn-secondary"><i class="fas fa-eye"></i> Voir le certificat</button>
+            </div>
+        `;
+    } else {
+        previewDiv.innerHTML = `
+            <div class="global-progress-card" style="margin-top: 20px;">
+                <h3><i class="fas fa-clock"></i> Non éligible au certificat</h3>
+                <p>Progression: ${Math.floor(globalProgress)}% (70% requis)</p>
+                <p>${completedCount}/${totalCourses} cours complétés</p>
+                <p>Encore ${Math.ceil((70 - globalProgress) / 100 * totalCourses)} cours à compléter</p>
+            </div>
+        `;
+    }
+}
+
+// ==================== MESSAGES ====================
+function updateMessageRecipients() {
+    const select = document.getElementById('message-recipient');
+    if (!select) return;
+    
+    if (currentUser.role === 'admin') {
+        select.innerHTML = '<option value="">Sélectionner un destinataire</option>' + 
+            learners.map(l => `<option value="${l.id}">${escapeHtml(l.name)} (${escapeHtml(l.email)})</option>`).join('');
+    } else {
+        select.innerHTML = '<option value="admin">Administrateur</option>';
+    }
+}
+
+async function sendMessage(e) {
+    e.preventDefault();
+    
+    const recipientId = document.getElementById('message-recipient').value;
+    const subject = document.getElementById('message-subject').value.trim();
+    const content = document.getElementById('message-content').value.trim();
+    
+    if (!recipientId || !subject || !content) {
+        alert('Veuillez remplir tous les champs');
+        return;
+    }
+    
+    const message = {
+        id: Date.now(),
+        fromId: currentUser.id,
+        fromName: currentUser.name,
+        toId: recipientId,
+        subject,
+        content,
+        date: new Date().toISOString(),
+        read: false
+    };
+    
+    messages.push(message);
+    await saveMessages();
+    
+    document.getElementById('message-form').reset();
+    loadMessages();
+    showAlert('Message envoyé avec succès', 'success');
+}
+
+function loadMessages() {
+    const container = document.getElementById('messages-list');
+    if (!container) return;
+    
+    let userMessages;
+    if (currentUser.role === 'admin') {
+        userMessages = messages.filter(m => m.toId === 'admin' || m.fromId === 'admin');
+    } else {
+        userMessages = messages.filter(m => m.toId == currentUser.id || m.fromId == currentUser.id);
+    }
+    
+    userMessages.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    if (userMessages.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#999;">Aucun message</p>';
+        return;
+    }
+    
+    container.innerHTML = userMessages.map(msg => {
+        const isFromMe = msg.fromId == currentUser.id;
+        const recipientName = isFromMe ? 
+            (msg.toId === 'admin' ? 'Administrateur' : (learners.find(l => l.id == msg.toId)?.name || 'Inconnu')) :
+            msg.fromName;
+        
+        return `
+            <div class="message-item" onclick="viewMessage(${msg.id})">
+                <h4><i class="fas fa-envelope"></i> ${escapeHtml(msg.subject)}</h4>
+                <p><strong>${isFromMe ? 'À' : 'De'}:</strong> ${escapeHtml(recipientName)}</p>
+                <p>${escapeHtml(msg.content.substring(0, 100))}${msg.content.length > 100 ? '...' : ''}</p>
+                <div class="message-date"><i class="fas fa-clock"></i> ${new Date(msg.date).toLocaleString('fr-FR')}</div>
+                <span class="message-status ${msg.read ? 'read' : 'unread'}">${msg.read ? 'Lu' : 'Non lu'}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+window.viewMessage = function(messageId) {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+    
+    if (!message.read && message.toId == currentUser.id) {
+        message.read = true;
+        saveMessages();
+        loadMessages();
+    }
+    
+    alert(`Sujet: ${message.subject}\n\nDe: ${message.fromName}\n\nMessage:\n${message.content}`);
+};
+
+function cleanOldMessages() {
+    const now = new Date();
+    let modified = false;
+    
+    messages = messages.filter(message => {
+        const messageDate = new Date(message.date);
+        const hoursDiff = (now - messageDate) / (1000 * 60 * 60);
+        
+        if (hoursDiff < 24) {
+            return true;
+        } else {
+            modified = true;
+            return false;
+        }
+    });
+    
+    if (modified) {
+        saveMessages();
+        if (document.getElementById('messages-tab').classList.contains('active')) {
+            loadMessages();
+        }
+        showAlert('Messages de plus de 24h supprimés','info');
+    }
+}
+
+// ==================== SUIVI GLOBAL ====================
 function updateTrackingSelect() {
     const select = document.getElementById('tracking-learner');
     if (!select) return;
-    
+    select.innerHTML = '<option value="">Sélectionner un apprenant</option>' + 
+        learners.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+}
+
+function updateCertificateSelect() {
+    const select = document.getElementById('certificate-learner');
+    if (!select) return;
     select.innerHTML = '<option value="">Sélectionner un apprenant</option>' + 
         learners.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
 }
 
 function showTracking(learnerId) {
     if (!checkAdmin()) return;
-    
     if (!learnerId) {
         document.getElementById('tracking-info').innerHTML = '';
         return;
@@ -1225,7 +1714,7 @@ function showTracking(learnerId) {
     if (!learner) return;
     
     if (!progress[learnerId]) {
-        progress[learnerId] = { completedCourses: [], quizAttempts: {} };
+        progress[learnerId] = { completedCourses: [], quizAttempts: {}, certificateDelivered: false };
     }
     
     const learnerProgress = progress[learnerId];
@@ -1233,16 +1722,16 @@ function showTracking(learnerId) {
     const completedCount = learnerProgress.completedCourses.length;
     const globalProgress = totalCourses > 0 ? (completedCount / totalCourses) * 100 : 0;
     
-    let html = `<h3>${escapeHtml(learner.name)}</h3>`;
+    let html = `<h2>${escapeHtml(learner.name)}</h2>`;
     html += `<div class="global-progress-card"><h4>Progression globale</h4>`;
-    html += `<div class="progress-bar" style="height: 20px;"><div class="progress-fill" style="width: ${globalProgress}%; height: 100%; line-height: 20px; text-align: center; color: white;">${Math.floor(globalProgress)}%</div></div>`;
+    html += `<div class="progress-bar"><div class="progress-fill" style="width: ${globalProgress}%">${Math.floor(globalProgress)}%</div></div>`;
     html += `<p>${completedCount}/${totalCourses} cours complétés</p>`;
     if (globalProgress >= 70) {
-        html += `<p style="color: #28a745; font-weight: bold;">🎓 Certificat éligible</p>`;
+        html += `<p style="color: #28a745;"><i class="fas fa-certificate"></i> Certificat éligible</p>`;
     }
     html += `</div>`;
     
-    html += `<h4>📚 Cours suivis</h4>`;
+    html += `<h3>📚 Cours suivis</h3>`;
     if (learner.enrolledCourses.length === 0) {
         html += `<p>Aucun cours suivi.</p>`;
     } else {
@@ -1264,7 +1753,7 @@ function showTracking(learnerId) {
         html += `</div>`;
     }
     
-    html += `<h4>📝 Scores des quiz</h4>`;
+    html += `<h3>📝 Scores des quiz</h3>`;
     const quizzesForLearner = quizzes.filter(q => learner.enrolledCourses.includes(q.courseId));
     if (quizzesForLearner.length === 0) {
         html += `<p>Aucun quiz disponible.</p>`;
@@ -1300,6 +1789,13 @@ function switchTab(tab) {
     
     if (tab === 'tracking' && currentUser && currentUser.role === 'admin') {
         updateTrackingSelect();
+    }
+    if (tab === 'certificates' && currentUser && currentUser.role === 'admin') {
+        updateCertificateSelect();
+    }
+    if (tab === 'messages') {
+        loadMessages();
+        updateMessageRecipients();
     }
 }
 
