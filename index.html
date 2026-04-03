@@ -1,35 +1,43 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>E-Learning Platform - Formation en ligne</title>
+    <title>E-Learning Pro - Formation en ligne</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🎓 Plateforme E-Learning</h1>
-            <p>Gestion complète des cours, quiz et apprenants</p>
+            <h1><i class="fas fa-graduation-cap"></i> E-Learning Pro</h1>
+            <p>Plateforme de formation en ligne - Certifications professionnelles</p>
         </header>
 
         <!-- Écran de connexion / inscription -->
         <div id="login-screen" class="login-screen">
             <div class="login-tabs">
-                <button class="login-tab-btn active" data-login-tab="login">🔐 Connexion</button>
-                <button class="login-tab-btn" data-login-tab="register">📝 Inscription</button>
+                <button class="login-tab-btn active" data-login-tab="login"><i class="fas fa-lock"></i> Connexion</button>
+                <button class="login-tab-btn" data-login-tab="register"><i class="fas fa-user-plus"></i> Inscription</button>
             </div>
 
             <!-- Formulaire de connexion -->
             <div id="login-tab" class="login-tab-content active">
                 <div class="login-card">
-                    <h2>Connexion</h2>
+                    <h2><i class="fas fa-sign-in-alt"></i> Connexion</h2>
                     <form id="login-form">
-                        <input type="text" id="login-username" placeholder="Nom d'utilisateur" required>
-                        <input type="password" id="login-password" placeholder="Mot de passe" required>
-                        <button type="submit">Se connecter</button>
+                        <div class="input-group">
+                            <i class="fas fa-user"></i>
+                            <input type="text" id="login-username" placeholder="Nom d'utilisateur" required>
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="login-password" placeholder="Mot de passe" required>
+                        </div>
+                        <button type="submit"><i class="fas fa-arrow-right"></i> Se connecter</button>
                     </form>
+                    <p class="forgot-password" onclick="showForgotPassword()"><i class="fas fa-key"></i> Mot de passe oublié ?</p>
                     <p id="login-error" class="error-message"></p>
                 </div>
             </div>
@@ -37,100 +45,117 @@
             <!-- Formulaire d'inscription -->
             <div id="register-tab" class="login-tab-content">
                 <div class="login-card">
-                    <h2>Créer un compte</h2>
+                    <h2><i class="fas fa-user-graduate"></i> Créer un compte</h2>
                     <form id="register-form">
-                        <input type="text" id="reg-name" placeholder="Nom complet" required>
-                        <input type="text" id="reg-username" placeholder="Nom d'utilisateur" required>
-                        <input type="password" id="reg-password" placeholder="Mot de passe" required>
-                        <input type="email" id="reg-email" placeholder="Email" required>
-                        <input type="tel" id="reg-phone" placeholder="Téléphone (optionnel)">
-                        <button type="submit">Créer mon compte</button>
+                        <div class="input-group">
+                            <i class="fas fa-user"></i>
+                            <input type="text" id="reg-name" placeholder="Nom complet" required>
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-at"></i>
+                            <input type="text" id="reg-username" placeholder="Nom d'utilisateur" required>
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="reg-password" placeholder="Mot de passe (min. 4 caractères)" required minlength="4">
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="reg-email" placeholder="Email" required>
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-phone"></i>
+                            <input type="tel" id="reg-phone" placeholder="Téléphone (optionnel)">
+                        </div>
+                        <button type="submit"><i class="fas fa-check"></i> Créer mon compte</button>
                     </form>
                     <p id="register-error" class="error-message"></p>
                 </div>
             </div>
         </div>
 
-        <!-- Interface principale (masquée au départ) -->
+        <!-- Interface principale -->
         <div id="main-app" style="display:none;">
-            <!-- Info utilisateur connecté -->
+            <!-- Header utilisateur -->
             <div class="user-info">
                 <div class="user-details">
-                    <span class="user-icon">👤</span>
-                    <span id="user-name-display"></span>
-                    <span id="user-role-badge" class="role-badge"></span>
+                    <div class="user-avatar" id="user-avatar">
+                        <i class="fas fa-user-circle"></i>
+                    </div>
+                    <div class="user-text">
+                        <span id="user-name-display"></span>
+                        <span id="user-role-badge" class="role-badge"></span>
+                    </div>
                 </div>
-                <button id="logout-btn" class="logout-btn">🚪 Déconnexion</button>
+                <button id="logout-btn" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Déconnexion</button>
             </div>
 
-            <!-- Navigation par onglets -->
+            <!-- Navigation -->
             <div class="tabs">
-                <button class="tab-btn active" data-tab="dashboard">📊 Mon Tableau de bord</button>
-                <button class="tab-btn admin-only" data-tab="learners">👥 Gestion Apprenants</button>
-                <button class="tab-btn admin-only" data-tab="courses">📚 Gestion Cours</button>
-                <button class="tab-btn admin-only" data-tab="quizzes">📝 Gestion Quiz</button>
-                <button class="tab-btn admin-only" data-tab="tracking">📊 Suivi Global</button>
+                <button class="tab-btn active" data-tab="dashboard"><i class="fas fa-tachometer-alt"></i> Tableau de bord</button>
+                <button class="tab-btn admin-only" data-tab="learners"><i class="fas fa-users"></i> Apprenants</button>
+                <button class="tab-btn admin-only" data-tab="courses"><i class="fas fa-book"></i> Cours</button>
+                <button class="tab-btn admin-only" data-tab="quizzes"><i class="fas fa-question-circle"></i> Quiz</button>
+                <button class="tab-btn admin-only" data-tab="tracking"><i class="fas fa-chart-line"></i> Suivi Global</button>
+                <button class="tab-btn admin-only" data-tab="certificates"><i class="fas fa-certificate"></i> Certificats</button>
+                <button class="tab-btn" data-tab="messages"><i class="fas fa-envelope"></i> Messages</button>
             </div>
 
-            <!-- Onglet Tableau de bord de l'apprenant -->
+            <!-- Onglet Tableau de bord -->
             <div id="dashboard-tab" class="tab-content active">
-                <h2>📚 Mes cours</h2>
+                <div id="certificate-alert"></div>
                 <div id="my-courses"></div>
-                
-                <h2>🎯 Mes quiz</h2>
                 <div id="my-quizzes"></div>
             </div>
 
-            <!-- Onglet Apprenants (Admin uniquement) -->
+            <!-- Onglet Apprenants (Admin) -->
             <div id="learners-tab" class="tab-content">
                 <div class="form-section">
-                    <h2>➕ Ajouter un apprenant (admin)</h2>
+                    <h2><i class="fas fa-user-plus"></i> Ajouter un apprenant</h2>
                     <form id="learner-form">
                         <input type="text" id="learner-name" placeholder="Nom complet" required>
                         <input type="text" id="learner-username" placeholder="Nom d'utilisateur" required>
                         <input type="password" id="learner-password" placeholder="Mot de passe" required>
                         <input type="email" id="learner-email" placeholder="Email" required>
                         <input type="tel" id="learner-phone" placeholder="Téléphone">
-                        <button type="submit">Ajouter l'apprenant</button>
+                        <button type="submit"><i class="fas fa-save"></i> Ajouter</button>
                     </form>
                 </div>
-
                 <div class="list-section">
-                    <h2>📋 Liste des apprenants</h2>
-                    <input type="text" id="learner-search" placeholder="🔍 Rechercher un apprenant..." class="search-input">
+                    <h2><i class="fas fa-list"></i> Liste des apprenants</h2>
+                    <input type="text" id="learner-search" placeholder="Rechercher..." class="search-input">
                     <div id="learners-list" class="cards-grid"></div>
                 </div>
             </div>
 
-            <!-- Onglet Cours (Admin uniquement) -->
+            <!-- Onglet Cours (Admin) -->
             <div id="courses-tab" class="tab-content">
                 <div class="form-section">
-                    <h2>➕ Ajouter un cours</h2>
+                    <h2><i class="fas fa-plus-circle"></i> Ajouter un cours</h2>
                     <form id="course-form">
                         <input type="text" id="course-title" placeholder="Titre du cours" required>
                         <textarea id="course-desc" placeholder="Description" rows="3" required></textarea>
-                        <input type="url" id="course-video" placeholder="URL de la vidéo (YouTube)" required>
+                        <input type="url" id="course-video" placeholder="URL de la vidéo" required>
                         <select id="course-level" required>
                             <option value="">Niveau</option>
                             <option value="Débutant">Débutant</option>
                             <option value="Intermédiaire">Intermédiaire</option>
                             <option value="Avancé">Avancé</option>
                         </select>
-                        <button type="submit">Ajouter le cours</button>
+                        <button type="submit"><i class="fas fa-save"></i> Ajouter</button>
                     </form>
                 </div>
-
                 <div class="list-section">
-                    <h2>📖 Liste des cours</h2>
-                    <input type="text" id="course-search" placeholder="🔍 Rechercher un cours..." class="search-input">
+                    <h2><i class="fas fa-book"></i> Liste des cours</h2>
+                    <input type="text" id="course-search" placeholder="Rechercher..." class="search-input">
                     <div id="courses-list" class="cards-grid"></div>
                 </div>
             </div>
 
-            <!-- Onglet Quiz (Admin uniquement) -->
+            <!-- Onglet Quiz (Admin) -->
             <div id="quizzes-tab" class="tab-content">
                 <div class="form-section">
-                    <h2>➕ Ajouter un quiz</h2>
+                    <h2><i class="fas fa-plus-circle"></i> Créer un quiz</h2>
                     <form id="quiz-form">
                         <select id="quiz-course" required>
                             <option value="">Sélectionner un cours</option>
@@ -138,10 +163,12 @@
                         <input type="text" id="quiz-title" placeholder="Titre du quiz" required>
                         <div id="questions-container">
                             <div class="question-item">
-                                <input type="text" placeholder="Question 1" class="question-text" required>
-                                <input type="text" placeholder="Option 1" class="option-input" required>
-                                <input type="text" placeholder="Option 2" class="option-input" required>
-                                <input type="text" placeholder="Option 3" class="option-input" required>
+                                <input type="text" placeholder="Question" class="question-text" required>
+                                <div class="options-container">
+                                    <input type="text" placeholder="Option 1" class="option-input" required>
+                                    <input type="text" placeholder="Option 2" class="option-input" required>
+                                    <input type="text" placeholder="Option 3" class="option-input" required>
+                                </div>
                                 <select class="correct-answer" required>
                                     <option value="">Bonne réponse</option>
                                     <option value="0">Option 1</option>
@@ -150,61 +177,122 @@
                                 </select>
                             </div>
                         </div>
-                        <button type="button" id="add-question">➕ Ajouter une question</button>
-                        <button type="submit">Créer le quiz</button>
+                        <button type="button" id="add-question"><i class="fas fa-plus"></i> Ajouter une question</button>
+                        <button type="submit"><i class="fas fa-save"></i> Créer le quiz</button>
                     </form>
                 </div>
-
                 <div class="list-section">
-                    <h2>📝 Quiz disponibles</h2>
+                    <h2><i class="fas fa-list"></i> Quiz disponibles</h2>
                     <div id="quizzes-list"></div>
                 </div>
             </div>
 
-            <!-- Onglet Suivi Global (Admin uniquement) -->
+            <!-- Onglet Suivi Global (Admin) -->
             <div id="tracking-tab" class="tab-content">
                 <div class="form-section">
-                    <h2>📊 Suivi des apprenants</h2>
+                    <h2><i class="fas fa-chart-line"></i> Suivi des apprenants</h2>
                     <select id="tracking-learner">
                         <option value="">Sélectionner un apprenant</option>
                     </select>
                 </div>
                 <div id="tracking-info"></div>
             </div>
+
+            <!-- Onglet Certificats (Admin) -->
+            <div id="certificates-tab" class="tab-content">
+                <div class="form-section">
+                    <h2><i class="fas fa-certificate"></i> Gestion des certificats</h2>
+                    <select id="certificate-learner">
+                        <option value="">Sélectionner un apprenant</option>
+                    </select>
+                    <button id="view-certificate-btn" class="btn-primary" onclick="viewAdminCertificate()"><i class="fas fa-eye"></i> Voir le certificat</button>
+                    <button id="download-certificate-btn" class="btn-secondary" onclick="downloadAdminCertificate()"><i class="fas fa-download"></i> Télécharger le certificat</button>
+                </div>
+                <div id="certificate-preview"></div>
+            </div>
+
+            <!-- Onglet Messages -->
+            <div id="messages-tab" class="tab-content">
+                <div class="messages-container">
+                    <div class="message-form-section">
+                        <h2><i class="fas fa-paper-plane"></i> Envoyer un message</h2>
+                        <form id="message-form">
+                            <select id="message-recipient" required>
+                                <option value="">Sélectionner un destinataire</option>
+                            </select>
+                            <input type="text" id="message-subject" placeholder="Sujet" required>
+                            <textarea id="message-content" placeholder="Votre message..." rows="5" required></textarea>
+                            <button type="submit"><i class="fas fa-send"></i> Envoyer</button>
+                        </form>
+                    </div>
+                    <div class="messages-list-section">
+                        <h2><i class="fas fa-inbox"></i> Mes messages</h2>
+                        <div id="messages-list"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Modal pour passer un quiz -->
+    <!-- Modal Quiz -->
     <div id="quiz-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
             <h3 id="modal-quiz-title"></h3>
             <div id="modal-questions"></div>
-            <button id="submit-quiz-modal">Soumettre le quiz</button>
+            <button id="submit-quiz-modal" class="btn-primary"><i class="fas fa-check"></i> Soumettre</button>
             <div id="modal-result"></div>
         </div>
     </div>
 
-    <!-- Footer -->
+    <!-- Modal Mot de passe oublié -->
+    <div id="forgot-password-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeForgotPasswordModal()">&times;</span>
+            <h3><i class="fas fa-key"></i> Récupération de mot de passe</h3>
+            <form id="forgot-password-form">
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="forgot-username" placeholder="Nom d'utilisateur" required>
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="forgot-email" placeholder="Email" required>
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="new-password" placeholder="Nouveau mot de passe (min. 4)" required minlength="4">
+                </div>
+                <button type="submit"><i class="fas fa-save"></i> Réinitialiser</button>
+            </form>
+            <p id="forgot-error" class="error-message"></p>
+        </div>
+    </div>
+
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-section">
-                <h3>🎓 Plateforme E-Learning</h3>
-                <p>Formation en ligne - Cours, quiz et certificats</p>
+                <h3><i class="fas fa-graduation-cap"></i> E-Learning Pro</h3>
+                <p>Formation en ligne de qualité avec certificats officiels</p>
             </div>
             <div class="footer-section">
-                <h3>📞 Contact</h3>
-                <p>📧 <a href="mailto:yvesmillogo459@gmail.com">yvesmillogo459@gmail.com</a></p>
-                <p>📱 <a href="tel:+22654128536">+22654128536</a></p>
-                <p>📍 16.17 Rue, Bobo-Dioulasso, Burkina Faso</p>
+                <h3><i class="fas fa-envelope"></i> Contact</h3>
+                <p><i class="fas fa-at"></i> <a href="mailto:yvesmillogo459@gmail.com">yvesmillogo459@gmail.com</a></p>
+                <p><i class="fas fa-phone"></i> <a href="tel:+22654128536">+22654128536</a></p>
+                <p><i class="fas fa-map-marker-alt"></i> Bobo-Dioulasso, Burkina Faso</p>
             </div>
             <div class="footer-section">
-                <h3>© 2026</h3>
-                <p>Plateforme E-Learning - Tous droits réservés</p>
+                <h3><i class="fas fa-copyright"></i> 2026</h3>
+                <p>Tous droits réservés</p>
             </div>
         </div>
     </footer>
-
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
 
     <script src="script.js"></script>
 </body>
