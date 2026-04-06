@@ -192,19 +192,6 @@ function setupRealtimeListeners() {
 async function init() {
     // Charger les données depuis Firebase
     await loadAllData();
-    
-    // Ajouter un cours de démonstration si vide
-    const coursesSnap = await db.collection('courses').get();
-    if (coursesSnap.empty) {
-        const demoCourse = {
-            id: Date.now(),
-            title: "Introduction à JavaScript",
-            description: "Apprenez les bases de JavaScript, le langage de programmation du web moderne.",
-            videoUrl: "https://www.youtube.com/watch?v=hdI2bqOjy3c",
-            level: "Débutant"
-        };
-        await db.collection('courses').doc(demoCourse.id.toString()).set(demoCourse);
-        courses.push(demoCourse);
     }
     
     // Configurer les écouteurs temps réel
