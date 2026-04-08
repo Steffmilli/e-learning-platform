@@ -22,8 +22,8 @@ let messages = [];
 let currentUser = null;
 
 // Compte admin prédéfini
-const ADMIN_USERNAME = "Steph";
-const ADMIN_PASSWORD = "Steffmilli00";
+const ADMIN_USERNAME = "Admin";
+const ADMIN_PASSWORD = "Admin1234";
 
 // ==================== CHARGEMENT DEPUIS FIREBASE ====================
 async function loadAllData() {
@@ -334,7 +334,7 @@ function handleLogin(e) {
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
         loginSuccess({
             id: 'admin',
-            name: 'MILLOGO S. Yves Stéphane',
+            name: 'Administrateur',
             username: ADMIN_USERNAME,
             role: 'admin'
         });
